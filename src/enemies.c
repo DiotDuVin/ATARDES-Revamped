@@ -20,14 +20,14 @@ EnemyPool AllocEnemyPool() // pré-Alloue le tableau d’ennemis avec une taille
 
 void freeEnemyPool(EnemyPool ep) // On libère le tableau des enemies.
 {
-    printf(COLOR_GRAY);
-    printf(" $ ");
-    printf(RESET);
-    printf("Freeing %s%d%s enemies:\t", COLOR_YELLOW, ep.count, RESET);
+    scr_printf(COLOR_GRAY);
+    scr_printf(" $ ");
+    scr_printf(RESET);
+    scr_printf("Freeing %s%d%s enemies:\t", COLOR_YELLOW, ep.count, RESET);
 
     if (ep.enemies != NULL)
         free(ep.enemies);
-    printf("%s Done %s\n", COLOR_GREEN, RESET);
+    scr_printf("%s Done %s\n", COLOR_GREEN, RESET);
 }
 
 // Definitions des différents types d'ennemis et de leurs caractéristiques
@@ -239,7 +239,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
         int px = terminal_x + (CELL_WIDTH + GAP) * (enemy->grid_x - (int)enemy->grid_x);
         int py = terminal_y + (CELL_HEIGHT + GAP / 2) * (enemy->grid_y - (int)enemy->grid_y);
 
-        printf(COLOR_STANDARD_BG); // Sprites des ennemis
+        scr_printf(COLOR_STANDARD_BG); // Sprites des ennemis
         if (enemy->type == ENEMY_TUX)
         {
             int sprite_anim = 0;
@@ -283,7 +283,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 1, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_SPEED)
@@ -312,7 +312,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 1, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_SPIDER)
@@ -349,7 +349,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 1, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_HYPERSPEED)
@@ -378,7 +378,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 3, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_HIGHTUX)
@@ -424,7 +424,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 3, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_SLIME_BOSS)
@@ -478,7 +478,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 5; i++)
             {
                 move_to(px - 3, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_TANK)
@@ -508,7 +508,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 4; i++)
             {
                 move_to(px - 3, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
         else if (enemy->type == ENEMY_BOSS_STUN)
@@ -541,14 +541,14 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 5; i++)
             {
                 move_to(px - 3, i + py);
-                printf(sprite_ennemy[sprite_anim][i]);
+                scr_puts(sprite_ennemy[sprite_anim][i]);
             }
         }
 
         // move_to((enemy->next_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + 2));
-        // printf("N%d", i);
+        // scr_printf("N%d", i);
         // move_to((enemy->previous_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->previous_cell.y * (CELL_HEIGHT + GAP / 2) + 2));
-        // printf("P%d", i);
+        // scr_printf("P%d", i);
         if (enemy->type == ENEMY_SLIME_BOSS || enemy->type == ENEMY_BOSS_STUN)
         {
             move_to(px, py - 1);
@@ -557,16 +557,16 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
         {
             move_to(px - 1, py - 1);
         }
-        printf(COLOR_HEALTH_BG); // Sprites de la barre de vie des ennemis
+        scr_printf(COLOR_HEALTH_BG); // Sprites de la barre de vie des ennemis
         float ratio_tot = enemy->hp / (float)enemy->maxHP;
         if (ratio_tot >= 0.75)
-            printf(COLOR_HEALTH_75);
+            scr_printf(COLOR_HEALTH_75);
         else if (ratio_tot >= 0.5)
-            printf(COLOR_HEALTH_50);
+            scr_printf(COLOR_HEALTH_50);
         else if (ratio_tot >= 0.25)
-            printf(COLOR_HEALTH_25);
+            scr_printf(COLOR_HEALTH_25);
         else
-            printf(COLOR_HEALTH_0);
+            scr_printf(COLOR_HEALTH_0);
 
         int noel = 0;
         if (noel == 1)
@@ -580,7 +580,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             for (int i = 0; i < 3; i++)
             {
                 move_to(px - 2, i + py-3);
-                printf(sprite_noel[i]);
+                scr_puts(sprite_noel[i]);
             }
         }
         else
@@ -592,26 +592,26 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
                 float rest = ratio * 4 - i;
 
                 if (rest >= 1)
-                    printf("█");
+                    scr_printf("█");
                 else if (rest >= 6.0f / 8.0f)
-                    printf("▉");
+                    scr_printf("▉");
                 else if (rest >= 3.0f / 4.0f)
-                    printf("▊");
+                    scr_printf("▊");
                 else if (rest >= 5.0f / 8.0f)
-                    printf("▋");
+                    scr_printf("▋");
                 else if (rest >= 1.0f / 2.0f)
-                    printf("▌");
+                    scr_printf("▌");
                 else if (rest >= 3.0f / 8.0f)
-                    printf("▍");
+                    scr_printf("▍");
                 else if (rest >= 1.0f / 4.0f)
-                    printf("▎");
+                    scr_printf("▎");
                 else if (rest >= 1.0f / 8.0f)
-                    printf("▏");
+                    scr_printf("▏");
                 else
-                    printf(" ");
+                    scr_printf(" ");
             }
         }
-        printf(RESET);
+        scr_printf(RESET);
     }
 }
 
@@ -730,7 +730,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             for (size_t i = 0; i < CELL_HEIGHT; i++)
             {
                 move_to((int)enemy->grid_x * (CELL_WIDTH + GAP) + 2, (int)enemy->grid_y * (CELL_HEIGHT + GAP / 2) + 2 + i);
-                printf(COLOR_STANDARD_BG "       ");
+                scr_printf(COLOR_STANDARD_BG "       ");
             }
         }
 
@@ -929,8 +929,8 @@ int updateWaveSystem(WaveSystem *ws, Grid grid, EnemyPool *ep, float dt, GameSta
 void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
 {
 
-    printf("SIMULATEUR\n");
-    printf("Appuie sur une touche quelquonque pour générer une vague, q pour quitter\n");
+    scr_printf("SIMULATEUR\n");
+    scr_printf("Appuie sur une touche quelquonque pour générer une vague, q pour quitter\n");
     WaveSystem ws;
     int i = 0;
     int argent_cumul = 0;
@@ -947,30 +947,30 @@ void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
     fprintf(fptr, "BOSS_STUN");
     fprintf(fptr, "\n");
 
-    printf("\t\t\t\tTUX\t\t");
-    printf("SPEED\t\t");
-    printf("SLIME BOSS\t");
-    printf("HYPERSPEED\t");
-    printf("SPIDER\t\t");
-    printf("HIGHTUX\t\t");
-    printf("ENEMY_TANK\t");
-    printf("BOSS_STUN");
-    printf("\n");
+    scr_printf("\t\t\t\tTUX\t\t");
+    scr_printf("SPEED\t\t");
+    scr_printf("SLIME BOSS\t");
+    scr_printf("HYPERSPEED\t");
+    scr_printf("SPIDER\t\t");
+    scr_printf("HIGHTUX\t\t");
+    scr_printf("ENEMY_TANK\t");
+    scr_printf("BOSS_STUN");
+    scr_printf("\n");
     while (n <= 0 || i < n)
     {
-        printf("\n");
-        printf("\n");
-        printf("Wave " COLOR_GREEN "%d" RESET, i);
+        scr_printf("\n");
+        scr_printf("\n");
+        scr_printf("Wave " COLOR_GREEN "%d" RESET, i);
 
         switchToWave(&ws, i);
 
-        printf("\t HP: " COLOR_RED "%.1f" RESET " HPPS: " COLOR_YELLOW "%.1f" RESET " \t", ws.current_wave_pattern.target_POWER, ws.current_wave_pattern.target_POWERPS);
+        scr_printf("\t HP: " COLOR_RED "%.1f" RESET " HPPS: " COLOR_YELLOW "%.1f" RESET " \t", ws.current_wave_pattern.target_POWER, ws.current_wave_pattern.target_POWERPS);
         for (int j = 0; j < ENEMY_COUNT; j++)
         {
-            printf("%.1f%% \t\t", ws.current_wave_pattern.random_coeffs[j] / ws.current_wave_pattern.coeff_sum * 100);
+            scr_printf("%.1f%% \t\t", ws.current_wave_pattern.random_coeffs[j] / ws.current_wave_pattern.coeff_sum * 100);
         }
 
-        printf("\n");
+        scr_printf("\n");
 
         int result = 0;
         float t = 0;
@@ -990,15 +990,15 @@ void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
             {
                 cnt++;
                 ep->count = 0;
-                printf("\t %02d. t=%.1fs SPAWN %d (%fHP) -> HP_LEFT=%.1f %d %d\n", cnt, t, result, ep->enemies[0].hp, ws.wave_HP_left, ep->enemies[0].money, argent_cumul);
+                scr_printf("\t %02d. t=%.1fs SPAWN %d (%fHP) -> HP_LEFT=%.1f %d %d\n", cnt, t, result, ep->enemies[0].hp, ws.wave_HP_left, ep->enemies[0].money, argent_cumul);
                 argent_cumul += ep->enemies[0].money;
                 spawn_cnt[result]++;
             }
 
-            fflush(stdout);
+            scr_flush();
         } while (result != -2);
 
-        printf("\tDurée de la vague:" COLOR_FREEZER_BASE " %.1fs " RESET ", %d ennemis %d", t, cnt, argent_cumul);
+        scr_printf("\tDurée de la vague:" COLOR_FREEZER_BASE " %.1fs " RESET ", %d ennemis %d", t, cnt, argent_cumul);
         // wave,hp,hpps,duration,ennemiesSpawned
         fprintf(fptr, "%d,%f,%f,%.1f,%d,%d", i, ws.current_wave_pattern.target_POWER, ws.current_wave_pattern.target_POWERPS, t, argent_cumul, cnt);
         for (int i = 0; i < ENEMY_COUNT; i++)
@@ -1009,7 +1009,7 @@ void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
 
         fflush(fptr);
 
-        fflush(stdout);
+        scr_flush();
 
         i++;
 

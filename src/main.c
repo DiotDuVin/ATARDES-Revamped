@@ -219,7 +219,7 @@ void handle_arrow_keys()
             }
         }
         drawFullGrid(grid);
-        fflush(stdout);
+        scr_flush();
     }
     else
     {
@@ -254,11 +254,13 @@ void handle_arrow_keys()
 struct termios base_t_settings;
 void configTerminal()
 {
-    // Cette fonction si on l'active n'affichera pas le résultat des printf en direct mais tout d'un coup apres avoir appelé fflush(stdout); (meilleures performances)
-    // https://en.cppreference.com/w/c/io/setvbuf
-    setvbuf(stdout, NULL, _IOFBF, (MIN_TERMINAL_WIDTH + 5) * (MIN_TERMINAL_HEIGHT + 5) * 2);
     setbuf(stdin, NULL);
+
+    // Écran alternatif : le jeu s'affiche sur un écran séparé, et le terminal
+    // retrouve son contenu d'origine à la fin (comme vim ou htop).
+    printf("\033[?1049h");
     hide_cursor();
+    fflush(stdout);
 
     // https://man7.org/linux/man-pages/man3/termios.3.html
     tcgetattr(STDIN_FILENO, &base_t_settings);
@@ -267,12 +269,19 @@ void configTerminal()
     // Place le terminal en mode non canonique (entrées envoyées sans enter)
     t_settings.c_lflag &= ~(ICANON);
     // sans echo, les touches pressés ne sont pas affichées.
-    t_settings.c_lflag &= ~(ECHO);
-    t_settings.c_lflag &= ~(ECHOE);
-    t_settings.c_lflag &= ~(ECHOK);
-    t_settings.c_lflag &= ~(ECHONL);
+    t_settings.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
 
     tcsetattr(STDIN_FILENO, TCSANOW, &t_settings);
+}
+
+// Remet le terminal dans son état d'origine
+void restoreTerminal()
+{
+    scr_shutdown();
+    printf(RESET "\033[?1049l"); // quitte l'écran alternatif
+    show_cursor();
+    fflush(stdout);
+    tcsetattr(STDIN_FILENO, TCSANOW, &base_t_settings);
 }
 
 // Cette fonction est exécutée automatiquement: a la fin du programme (fin normale, appel a exit(), interruption: CTRL+C)
@@ -281,20 +290,24 @@ void cleanup()
 {
     if (!freed)
     {
-        show_cursor();
+        freed = true;
+        restoreTerminal();
+
         struct timespec current_time;
         clock_gettime(CLOCK_MONOTONIC, &current_time);
-        printf(RESET "\nBye.\n Tu as tenu: %d vagues\n Pendant: %d min\n", waveSystem.current_wave_index, (current_time.tv_sec - time_start) / 60);
-        fflush(stdout);
-        tcsetattr(STDIN_FILENO, TCSANOW, &base_t_settings);
+        printf("Bye.\n Tu as tenu: %d vagues\n Pendant: %ld min\n", waveSystem.current_wave_index, (long)(current_time.tv_sec - time_start) / 60);
 
         freeGrid(grid);           // Libère les allocations dynamiques liées à la grille
         freeEnemyPool(enemyPool); // Libère les allocations dynamiques liées aux ennemis
         freeLabels(labels);       // Libère les allocations dynamiques liées aux labels
-        freed = true;
+        fflush(stdout);
     }
+}
 
-    exit(EXIT_SUCCESS);
+void onSignal(int sig)
+{
+    (void)sig;
+    exit(EXIT_SUCCESS); // exit() appelle cleanup() grâce à atexit()
 }
 
 /**
@@ -306,27 +319,15 @@ void cleanup()
  */
 int main(int argc, char *argv[])
 {
-    int cnt;
-    char **saves = listSaves(&cnt);
-    for (size_t i = 0; i < cnt; i++)
-    {
-        printf("%s\n", saves[i]);
-        free(saves[i]);
-    }
-    free(saves);
-    msleep(1000);
-
-    // return 0;
-
     // Enregistre la fonction cleanup pour qu'elle soit exécutée lors la terminaison du programme.
     atexit(cleanup);
-    struct sigaction act;
-    act.sa_handler = &cleanup;
+    struct sigaction act = {0};
+    act.sa_handler = &onSignal;
+    sigemptyset(&act.sa_mask);
     sigaction(SIGINT, &act, NULL);
+    sigaction(SIGTERM, &act, NULL);
 
-    unsigned int seed = time(NULL);
-    printf("seed: %d\n", seed);
-    srand(seed);
+    srand(time(NULL));
 
     // Timers du jeu
     struct timespec prev_time;
@@ -344,6 +345,14 @@ int main(int argc, char *argv[])
     // Vérifie et bloque tant que la taille du terminal ne convient pas
     checkTerminalSize(&width, &height);
     clear_screen();
+    fflush(stdout);
+
+    // À partir d'ici, tout l'affichage passe par le moteur de rendu (double buffering)
+    if (!scr_init(width, height))
+    {
+        printCritical("Failed to allocate screen buffer");
+        exit(EXIT_FAILURE);
+    }
 
     if (!(argc > 1 && (strcmp(argv[1], "--play") == 0 || strcmp(argv[1], "--sim-wave") == 0)))
     {
@@ -400,9 +409,7 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[1], "--sim-wave") == 0)
         {
-            clear_screen();
-            move_to(1, 1);
-            printf(RESET);
+            restoreTerminal(); // la simulation affiche du texte normal, sans le moteur de rendu
             int n = 0;
             if (argc == 3)
                 n = atoi(argv[2]);
@@ -415,7 +422,7 @@ int main(int argc, char *argv[])
     drawFullGrid(grid);
 
     // size_t est un int de capacité plus élevée.
-    size_t frame_index;
+    size_t frame_index = 0;
     int fps = 0;
 
     // entiers qui gèrent la vitesse du jeu
@@ -531,17 +538,14 @@ int main(int argc, char *argv[])
             compteur_animation_game_speed += 10;
         }
 
-        // Mise a jour de l'affichage
-        fflush(stdout);
-
         /*
         ##############################
         AFFICHAGE DE LA RANGÉE DU HAUT
         ##############################
         */
         move_to(0, 0);
-        printf(COLOR_STANDARD_BG);
-        printf(ERASE_LINE "Enemies: %d/%d | Labels: %d/%d | (%d fps) | runtime: %lds | wave: %d | speed: %d",
+        scr_printf(COLOR_STANDARD_BG);
+        scr_printf(ERASE_LINE "Enemies: %d/%d | Labels: %d/%d | (%d fps) | runtime: %lds | wave: %d | speed: %d",
                enemyPool.count,                  //
                enemyPool.length,                 //
                labels.count,                     //
@@ -552,11 +556,14 @@ int main(int argc, char *argv[])
                game_speed_control);
 
         if (waveSystem.wave_timer > 0)
-            printf(" | Prochaine vague: %.1fs", waveSystem.wave_timer);
+            scr_printf(" | Prochaine vague: %.1fs", waveSystem.wave_timer);
 
         // Affichage des stats de jeu (vie et argent)
         move_to(width - (7 + 10), 1);
-        printf(COLOR_RED "%02d ❤" RESET COLOR_STANDARD_BG " | " COLOR_YELLOW " % 4d €" RESET, gameStats.health, gameStats.cash);
+        scr_printf(COLOR_RED "%02d ❤" RESET COLOR_STANDARD_BG " | " COLOR_YELLOW " % 4d €" RESET, gameStats.health, gameStats.cash);
+
+        // Envoi de l'image complète au terminal (une seule écriture, seulement ce qui a changé)
+        scr_flush();
 
         /*
         ###########################
@@ -635,8 +642,8 @@ int main(int argc, char *argv[])
                 showSaveScreen(ligne);
                 if (c == 10)
                 {
-                    char* save_name;
-                    snprintf(save_name, 10, "save_%d", ligne);
+                    char save_name[32];
+                    snprintf(save_name, sizeof(save_name), "save_%d", ligne);
                     loadProgress(save_name, &grid, &gameStats, &waveSystem, &enemyPool, &labels);
                     fillBG(1, 1, width + 1, height + 1);
                     drawFullGrid(grid);
@@ -656,14 +663,6 @@ int main(int argc, char *argv[])
     ################
     */
 
-    printf("\n");
-    clear_screen();
-    move_to(0, 0);
-    // freeGrid(grid);           // Libère les allocations dynamiques liées à la grille
-    // freeEnemyPool(enemyPool); // Libère les allocations dynamiques liées aux ennemis
-    // freeLabels(labels);       // Libère les allocations dynamiques liées aux labels
-    // Les free se trouvent au niveau de la fonction cleanup (juste avant main)
-
-    cleanup();
+    // Les free se trouvent dans la fonction cleanup, appelée automatiquement à la sortie (atexit)
     return 0;
 }

@@ -14,6 +14,8 @@
 #include <termios.h>
 #include <malloc.h>
 
+#include "render.h"
+
 /*
 #############
 CONFIGURATION
@@ -28,6 +30,11 @@ CONFIGURATION
 #define MAX_TERMINAL_HEIGHT 100
 
 #define TARGET_FPS 144
+
+// Durée d'une image de l'animation d'intro (en millisecondes).
+// Avant le moteur de rendu, c'était la lenteur du terminal qui ralentissait l'animation ;
+// maintenant l'affichage est quasi instantané, donc on fixe le rythme ici.
+#define INTRO_FRAME_MS 12
 #define WAVE_DELAY 0.5 // (secondes)
 
 #define CELL_WIDTH 18
@@ -38,7 +45,7 @@ CONFIGURATION
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CLAMP(x, a, b) MIN(MAX(x, a), b)
-#define ABS(a) ((a < 0) ? (-a) : (a))
+#define ABS(a) (((a) < 0) ? -(a) : (a))
 
 #define PI 3.14159265359
 /*

@@ -110,11 +110,16 @@ char **listSaves(int *cnt)
     }
     struct dirent *file_info;
     // char saves[100][256];
-    char **saves = calloc(sizeof(char *), 100);
+    char **saves = calloc(100, sizeof(char *));
+    if (saves == NULL)
+    {
+        closedir(dir);
+        return NULL;
+    }
     // memset(saves, 0, sizeof(saves));
 
     *cnt = 0;
-    while ((file_info = readdir(dir)) != NULL)
+    while (*cnt < 100 && (file_info = readdir(dir)) != NULL)
     {
         if (strncmp(file_info->d_name, ".", 1) == 0 || strncmp(file_info->d_name, "..", 2) == 0)
             continue;
@@ -124,7 +129,7 @@ char **listSaves(int *cnt)
         strcpy(saves[*cnt], file_info->d_name);
         (*cnt)++;
     }
-    free(dir);
+    closedir(dir);
 
     return saves;
 }

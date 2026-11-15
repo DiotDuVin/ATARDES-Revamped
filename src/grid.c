@@ -47,10 +47,10 @@ void allocateGridCells(Grid *grid)
 
 void freeGrid(Grid grid)
 {
-    printf(COLOR_GRAY);
-    printf(" $ ");
-    printf(RESET);
-    printf("Freeing %s%dx%d%s grid:\t", COLOR_YELLOW, grid.width, grid.height, RESET);
+    scr_printf(COLOR_GRAY);
+    scr_printf(" $ ");
+    scr_printf(RESET);
+    scr_printf("Freeing %s%dx%d%s grid:\t", COLOR_YELLOW, grid.width, grid.height, RESET);
 
     if (grid.cells != NULL)
     {
@@ -63,7 +63,7 @@ void freeGrid(Grid grid)
         free(grid.cells);
     }
 
-    printf("%s Done %s\n", COLOR_GREEN, RESET);
+    scr_printf("%s Done %s\n", COLOR_GREEN, RESET);
 }
 
 void genBasicPath(Grid *grid) // Génération du terrain par rapport a la seed (rand())
@@ -201,13 +201,13 @@ void genBasicPath(Grid *grid) // Génération du terrain par rapport a la seed (
 }
 void fillBG(int xmin, int ymin, int xmax, int ymax) // Efface tout
 {
-    printf(COLOR_STANDARD_BG);
+    scr_printf(COLOR_STANDARD_BG);
     for (int x = xmin; x < xmax; x++)
     {
         for (int y = ymin; y < ymax; y++)
         {
             move_to(x, y);
-            printf(" ");
+            scr_printf(" ");
         }
     }
 }
@@ -223,24 +223,24 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 int terminal_x = cell.x * (CELL_WIDTH + GAP) + 3;
                 int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + 2;
 
-                printf(COLOR_TOWER_SLOT_BG);
+                scr_printf(COLOR_TOWER_SLOT_BG);
                 move_to(terminal_x, terminal_y + y);
 
                 {
                     for (int x = 0; x < CELL_WIDTH; x++)
                     {
-                        printf(" ");
+                        scr_printf(" ");
                     }
                 }
-                printf(RESET);
+                scr_printf(RESET);
             }
         }
         if (cell.selected) // La cellule selectionnée est dessinée avec un cadre autour
         {
             int terminal_x = cell.x * (CELL_WIDTH + GAP) + 3;
             int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + 2;
-            printf(COLOR_SELECTED_SLOT);
-            printf(COLOR_TOWER_SLOT_BG);
+            scr_printf(COLOR_SELECTED_SLOT);
+            scr_printf(COLOR_TOWER_SLOT_BG);
             for (int y = 0; y < CELL_HEIGHT; y++)
             {
                 move_to(terminal_x, terminal_y + y);
@@ -250,26 +250,26 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                     {
                         if (x == 0)
                         {
-                            printf("█");
+                            scr_printf("█");
                         }
                         if (x == 1 && y != 0 && y != CELL_HEIGHT - 1)
                         {
-                            printf(" ");
+                            scr_printf(" ");
                         }
                         if (x == CELL_WIDTH - 2 && y != 0 && y != CELL_HEIGHT - 1)
                         {
                             move_to(terminal_x + x, terminal_y + y);
-                            printf(" ");
+                            scr_printf(" ");
                         }
                         else if (x == CELL_WIDTH - 1)
                         {
                             move_to(terminal_x + x, terminal_y + y);
-                            printf("█");
+                            scr_printf("█");
                         }
                         else if (y == 0)
-                            printf("▀");
+                            scr_printf("▀");
                         else if (y == CELL_HEIGHT - 1)
-                            printf("▄");
+                            scr_printf("▄");
                     }
                 }
             }
@@ -278,10 +278,10 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
         {
             int x_current_turret = cell.x * (CELL_WIDTH + GAP) + 3 + 2;
             int y_current_turret = cell.y * (CELL_HEIGHT + GAP / 2) + 2 + 1;
-            printf(COLOR_TOWER_SLOT_BG);
+            scr_printf(COLOR_TOWER_SLOT_BG);
             if (cell.turret.type == Sniper) // Sniper, 8 sprites pour les 8 directions
             {
-                printf(COLOR_SNIPER_BASE);
+                scr_printf(COLOR_SNIPER_BASE);
                 char *sprite[3][8][7] = {
                     {
                         // Sniper de niveau 1 (niveau 0 pour le programme)
@@ -469,12 +469,12 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][index][i]);
+                    scr_puts(sprite[cell.turret.lvl][index][i]);
                 }
             }
             else if (cell.turret.type == Inferno) // Sprites de l'inferno, la plus simple des tourelles, seulement 2 sprites pour le niveau 1 et 2
             {
-                printf(COLOR_INFERNO_BASE);
+                scr_printf(COLOR_INFERNO_BASE);
 
                 char *sprite[2][4][7] = {
                     {{"     ▄██▄     ",
@@ -549,12 +549,12 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][inferno_shooting][i]);
+                    scr_puts(sprite[cell.turret.lvl][inferno_shooting][i]);
                 }
             }
             else if (cell.turret.type == Mortier) // Sprites du mortier, 4 sprites pour le mortier normale et le mortier qui tire (de niveau 1 et de niveau 2)
             {
-                printf(COLOR_MORTIER_BASE);
+                scr_printf(COLOR_MORTIER_BASE);
 
                 char *sprite[2][3][7] = {
                     {{"  ██████████  ",
@@ -617,12 +617,12 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][mortier_shooting][i]);
+                    scr_puts(sprite[cell.turret.lvl][mortier_shooting][i]);
                 }
             }
             else if (cell.turret.type == Gatling) // Sprites de la gatling
             {
-                printf(COLOR_GATLING_BASE);
+                scr_printf(COLOR_GATLING_BASE);
 
                 char *sprite[2][5][7] = {
                     {{"  ████▀▀████  ",
@@ -708,12 +708,12 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][gatling_shooting][i]);
+                    scr_puts(sprite[cell.turret.lvl][gatling_shooting][i]);
                 }
             }
             else if (cell.turret.type == Freezer) // Sprites du freezer, similaire au mortier
             {
-                printf(COLOR_FREEZER_BASE);
+                scr_printf(COLOR_FREEZER_BASE);
 
                 char *sprite[2][6][7] = {
                     {{"   ▄  ██  ▄   ",
@@ -823,18 +823,18 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][freezer_shooting][i]);
+                    scr_puts(sprite[cell.turret.lvl][freezer_shooting][i]);
                 }
             }
             else if (cell.turret.type == Petrificateur) // Sprites du pétrificateur (y'en a beaucoup car c'est la seule tourelle avec une animation compliquée)
             {
                 if (cell.turret.lvl == 0)
                 {
-                    printf(COLOR_PETRIFICATEUR_BASE);
+                    scr_printf(COLOR_PETRIFICATEUR_BASE);
                 }
                 else
                 {
-                    printf(COLOR_PETRIFICATEUR_BASE_LVL2);
+                    scr_printf(COLOR_PETRIFICATEUR_BASE_LVL2);
                 }
 
                 char *sprite[2][20][7] = {
@@ -1135,12 +1135,12 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][petrificateur_shooting][i]);
+                    scr_puts(sprite[cell.turret.lvl][petrificateur_shooting][i]);
                 }
             }
             else if (cell.turret.type == Banque) // Sprites de la banque (avec animation lorsque l'argent apparait)
             {
-                printf(COLOR_BANQUE_BASE);
+                scr_printf(COLOR_BANQUE_BASE);
 
                 char *sprite[2][10][7] = {
                     {{"    ▄▄▄▄▄▄    ",
@@ -1313,10 +1313,10 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                 for (int i = 0; i < 7; i++)
                 {
                     move_to(x_current_turret, y_current_turret + i);
-                    printf(sprite[cell.turret.lvl][banque_generating][i]);
+                    scr_puts(sprite[cell.turret.lvl][banque_generating][i]);
                 }
             }
-            printf(RESET);
+            scr_printf(RESET);
         }
     }
     if (cell.type == CHEMIN)
@@ -1332,8 +1332,8 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
         bool chemin_vers_bas_droit = cell.x + 1 < grid.width && cell.y + 1 < grid.height && grid.cells[cell.x + 1][cell.y + 1].type == CHEMIN;
         bool chemin_vers_bas_gauche = cell.x - 1 >= 0 && cell.y + 1 < grid.height && grid.cells[cell.x - 1][cell.y + 1].type == CHEMIN;
 
-        printf(COLOR_STANDARD_BG);
-        printf(COLOR_PATH_BORDER);
+        scr_printf(COLOR_STANDARD_BG);
+        scr_printf(COLOR_PATH_BORDER);
         for (int y = 0; y < CELL_HEIGHT + 2; y++)
         {
             int terminal_x = (cell.x * (CELL_WIDTH + GAP) + 3);
@@ -1348,53 +1348,53 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
                     !side && ((x == 0 && y == 0 && !chemin_vers_gauche && !chemin_vers_haut)                                            //
                               || (x == CELL_WIDTH + 1 && y == CELL_HEIGHT + 1 && chemin_vers_bas && chemin_vers_droite)                 //
                               || (x == CELL_WIDTH + 1 && y == 0 && chemin_vers_haut_droit && chemin_vers_haut && !chemin_vers_droite))) //
-                    printf("┏");
-                // printf("╭");
+                    scr_printf("┏");
+                // scr_printf("╭");
                 //
                 else if (!side && ((x == CELL_WIDTH + 1 && y == 0 && !chemin_vers_droite && !chemin_vers_haut)  //
                                    || (x == 0 && y == CELL_HEIGHT + 1 && chemin_vers_gauche && chemin_vers_bas) //
                                    || (x == 0 && y == 0 && chemin_vers_haut && chemin_vers_haut_gauche && !chemin_vers_gauche)))
-                    printf("┓");
-                // printf("╮");
+                    scr_printf("┓");
+                // scr_printf("╮");
                 //
                 else if (!side                                                                                        //
                          && ((x == CELL_WIDTH + 1 && y == CELL_HEIGHT + 1 && !chemin_vers_droite && !chemin_vers_bas) //
                              || (x == 0 && y == 0 && chemin_vers_haut && chemin_vers_gauche && !chemin_vers_haut_gauche) || (x == 0 && y == CELL_HEIGHT + 1 && chemin_vers_bas && !chemin_vers_gauche && chemin_vers_bas_gauche)))
-                    printf("┛");
-                // printf("╯");
+                    scr_printf("┛");
+                // scr_printf("╯");
                 //
                 else if (
                     !side                                                                                                       //
                     && ((x == 0 && y == CELL_HEIGHT + 1 && !chemin_vers_gauche && !chemin_vers_bas)                             //
                         || (y == 0 && x == CELL_WIDTH + 1 && chemin_vers_haut && chemin_vers_droite && !chemin_vers_haut_droit) //
                         || (y == CELL_HEIGHT + 1 && x == CELL_WIDTH + 1 && chemin_vers_bas && !chemin_vers_droite && chemin_vers_bas_droit)))
-                    printf("┗");
-                // printf("╰");
+                    scr_printf("┗");
+                // scr_printf("╰");
                 //
                 else if (!(                                                        //
                              (cell.x == 0 && x == 0)                               //
                              || (cell.x == grid.width - 1 && x == CELL_WIDTH + 1)) //
                          && ((x == 0 && !chemin_vers_gauche)                       //
                              || (x == CELL_WIDTH + 1 && !chemin_vers_droite)))
-                    printf("┃");
-                // printf("│");
+                    scr_printf("┃");
+                // scr_printf("│");
                 //
                 else if (((y == 0 && !chemin_vers_haut) //
                           || (y == CELL_HEIGHT + 1 && !chemin_vers_bas)))
-                    printf("━");
-                // printf("─");
+                    scr_printf("━");
+                // scr_printf("─");
                 //
                 else if (x >= 1 && x <= CELL_WIDTH && y >= 1 && y <= CELL_HEIGHT)
                 {
-                    printf(" ");
+                    scr_printf(" ");
                 }
                 else
                 {
-                    printf(" ");
+                    scr_printf(" ");
                 }
             }
         }
-        printf(RESET);
+        scr_printf(RESET);
     }
 }
 

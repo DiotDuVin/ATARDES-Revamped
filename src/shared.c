@@ -58,17 +58,17 @@ void drawLabels(Labels labels) // affiche tous les labels
     for (int i = 0; i < labels.count; i++)
     {
         move_to(labels.labels[i].x, labels.labels[i].y);
-        printf(COLOR_STANDARD_BG COLOR_YELLOW "%d" RESET, labels.labels[i].text);
+        scr_printf(COLOR_STANDARD_BG COLOR_YELLOW "%d" RESET, labels.labels[i].text);
     }
 };
 
 void freeLabels(Labels labels) // nettoie le tableau des labels
 {
-    printf(COLOR_GRAY " $ " RESET "Freeing %s%d%s labels:\t", COLOR_YELLOW, labels.count, RESET);
+    scr_printf(COLOR_GRAY " $ " RESET "Freeing %s%d%s labels:\t", COLOR_YELLOW, labels.count, RESET);
 
     free(labels.labels);
 
-    printf("%s Done %s\n", COLOR_GREEN, RESET);
+    scr_printf("%s Done %s\n", COLOR_GREEN, RESET);
 };
 
 /*
@@ -93,31 +93,32 @@ char get_key_press()
 // Les fonctions suivantes sont claires de par leurs noms (les "\033[" indiquent des actions sur l'affichage (voir README et les codes ANSI))
 void move_to(int x, int y)
 {
-    printf("\033[%d;%dH", y, x);
+    scr_printf("\033[%d;%dH", y, x);
 }
 
 void clear_screen()
 {
-    printf("\033[2J");
+    scr_printf("\033[2J");
 }
 
 void clear_line()
 {
-    printf("\033[2K");
+    scr_printf("\033[2K");
 }
 
 void hide_cursor()
 {
-    printf("\033[?25l");
+    scr_printf("\033[?25l");
 }
 
 void show_cursor()
 {
-    printf("\033[?25h");
+    scr_printf("\033[?25h");
 }
 
 void printCritical(char *errorMessage)
 {
+    scr_shutdown(); // le message doit s'afficher directement dans le terminal, pas dans le buffer
     printf("%s%sCRITICAL%s: %s %s %s\n", COLOR_RED, UNDERLINE, UNDERLINE_RST, BOLD, errorMessage, RESET);
 }
 
@@ -141,15 +142,15 @@ void checkTerminalSize(int *width, int *height)
         clear_screen();
 
         move_to(*width / 2 - 20, *height / 2 - 1);
-        printf("Merci d'agrandir le terminal ou de dézoomer avec la commande \"ctrl -\"");
+        scr_printf("Merci d'agrandir le terminal ou de dézoomer avec la commande \"ctrl -\"");
         move_to(*width / 2 - 7, *height / 2);
-        printf("Colones: %d/%d", *width, MIN_TERMINAL_WIDTH);
+        scr_printf("Colones: %d/%d", *width, MIN_TERMINAL_WIDTH);
         move_to(*width / 2 - 7, *height / 2 + 1);
-        printf("Rangées: %d/%d", *height, MIN_TERMINAL_HEIGHT);
+        scr_printf("Rangées: %d/%d", *height, MIN_TERMINAL_HEIGHT);
 
         get_terminal_size(width, height);
 
-        fflush(stdout);
+        scr_flush();
 
         msleep(200);
     }
@@ -158,7 +159,7 @@ void checkTerminalSize(int *width, int *height)
 // Dessine les cercles de portée des tourelles
 void drawRange(int term_width, int term_height, float range, float grid_x, float grid_y, bool fill)
 {
-    printf(COLOR_STANDARD_BG);
+    scr_printf(COLOR_STANDARD_BG);
 
     for (int y = 0; y < term_height; y++)
     {
@@ -178,7 +179,7 @@ void drawRange(int term_width, int term_height, float range, float grid_x, float
                 if (term_x > 0 && term_y > 0 && term_x < term_width && term_y < term_height)
                 {
                     move_to(term_x, term_y);
-                    printf("•");
+                    scr_printf("•");
                 }
             }
         }
@@ -240,7 +241,7 @@ void drawGameSpeed(int game_speed_anim, int term_width, int game_speed_anim_paus
         for (int i = 0; i < 7; i++)
         {
             move_to(term_width - (CELL_WIDTH * 2) + 7, 3 + i);
-            printf(sprite[5][i]);
+            scr_puts(sprite[5][i]);
         }
     }
     else
@@ -248,7 +249,7 @@ void drawGameSpeed(int game_speed_anim, int term_width, int game_speed_anim_paus
         for (int i = 0; i < 7; i++)
         {
             move_to(term_width - (CELL_WIDTH * 2) + 7, 3 + i);
-            printf(sprite[(int)log2(game_speed_anim)][i]);
+            scr_puts(sprite[(int)log2(game_speed_anim)][i]);
         }
     }
 }
@@ -274,20 +275,20 @@ void anim_debut(int term_width, int term_height)
                 move_to(x, y);
                 if (x == x_wanted || y == y_wanted || x == term_width - x_wanted || y == term_height - y_wanted)
                 {
-                    printf("██");
+                    scr_printf("██");
                 }
                 else
                 {
-                    printf("  ");
+                    scr_printf("  ");
                 }
                 // move_to(term_width / 2, term_height / 2);
-                // printf("%d|%d", x_wanted, y_wanted);
+                // scr_printf("%d|%d", x_wanted, y_wanted);
             }
         }
         x_wanted += 2;
         y_wanted += 1;
-        fflush(stdout);
-        msleep(2);
+        scr_flush();
+        msleep(INTRO_FRAME_MS);
     }
     x_wanted = term_height * 2;
     y_wanted = term_height / 2;
@@ -300,20 +301,20 @@ void anim_debut(int term_width, int term_height)
                 move_to(x, y);
                 if ((x == x_wanted && y < y_wanted) || (y == y_wanted && x < x_wanted) || (x == term_width - x_wanted && y > term_height - y_wanted) || (y == term_height - y_wanted && x > term_width - x_wanted))
                 {
-                    printf("██");
+                    scr_printf("██");
                 }
                 else
                 {
-                    printf("  ");
+                    scr_printf("  ");
                 }
                 // move_to(term_width / 2, term_height / 2);
-                // printf("%d|%d", x_wanted, y_wanted);
+                // scr_printf("%d|%d", x_wanted, y_wanted);
             }
         }
         x_wanted += 2;
         y_wanted += 1;
-        fflush(stdout);
-        msleep(2);
+        scr_flush();
+        msleep(INTRO_FRAME_MS);
     }
     x_wanted = term_height * 2;
     y_wanted = term_height / 2;
@@ -326,20 +327,20 @@ void anim_debut(int term_width, int term_height)
                 move_to(x, y);
                 if ((x == x_wanted && y > term_height - y_wanted) || (y == y_wanted && x > term_width - x_wanted) || (x == term_width - x_wanted && y < y_wanted) || (y == term_height - y_wanted && x < x_wanted))
                 {
-                    printf("██");
+                    scr_printf("██");
                 }
                 else
                 {
-                    printf("  ");
+                    scr_printf("  ");
                 }
                 // move_to(term_width / 2, term_height / 2);
-                // printf("%d|%d", x_wanted, y_wanted);
+                // scr_printf("%d|%d", x_wanted, y_wanted);
             }
         }
         x_wanted += 2;
         y_wanted += 1;
-        fflush(stdout);
-        msleep(2);
+        scr_flush();
+        msleep(INTRO_FRAME_MS);
     }
 
     x_wanted = term_height * 2;
@@ -358,18 +359,18 @@ void anim_debut(int term_width, int term_height)
                 move_to(x, y);
                 if ((x == x_wanted && y < y_wanted && y > term_height - y_wanted) || (y == y_wanted && x < x_wanted && x > term_width - x_wanted) || (x == term_width - x_wanted && y > term_height - y_wanted && y < y_wanted) || (y == term_height - y_wanted && x > term_width - x_wanted && x < x_wanted) || (x == x_wanted2 && y < y_wanted2 && y > term_height - y_wanted2) || (y == y_wanted2 && x < x_wanted2 && x > term_width - x_wanted2) || (x == term_width - x_wanted2 && y > term_height - y_wanted2 && y < y_wanted2) || (y == term_height - y_wanted2 && x > term_width - x_wanted2 && x < x_wanted2) || (x == x_wanted3 && y < y_wanted3 && y > term_height - y_wanted3) || (y == y_wanted3 && x < x_wanted3 && x > term_width - x_wanted3) || (x == term_width - x_wanted3 && y > term_height - y_wanted3 && y < y_wanted3) || (y == term_height - y_wanted3 && x > term_width - x_wanted3 && x < x_wanted3))
                 {
-                    printf("██");
+                    scr_printf("██");
                 }
                 else
                 {
-                    printf("  ");
+                    scr_printf("  ");
                 }
                 // move_to(term_width / 2, term_height / 2);
-                // printf("%d|%d", x_wanted, y_wanted);
+                // scr_printf("%d|%d", x_wanted, y_wanted);
                 // move_to(term_width / 2, term_height / 2 + 1);
-                // printf("%d|%d", x_wanted2, y_wanted2);
+                // scr_printf("%d|%d", x_wanted2, y_wanted2);
                 // move_to(term_width / 2, term_height / 2 + 2);
-                // printf("%d|%d", x_wanted3, y_wanted3);
+                // scr_printf("%d|%d", x_wanted3, y_wanted3);
             }
         }
         x_wanted += 2;
@@ -378,8 +379,8 @@ void anim_debut(int term_width, int term_height)
         y_wanted2 = y_wanted - 8;
         x_wanted3 = x_wanted - 32;
         y_wanted3 = y_wanted - 16;
-        fflush(stdout);
-        msleep(2);
+        scr_flush();
+        msleep(INTRO_FRAME_MS);
     }
     int ecart_term_y = 20;
     int ecart_AT = 7;
@@ -401,12 +402,12 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 6; i++)
         {
             move_to(term_width / 2 - 33 - 4 * (21 - n), ecart_term_y + ecart_AT + i);
-            printf("    ");
+            scr_printf("    ");
             move_to(term_width / 2 - 33 + 4 * (20 - n), ecart_term_y + i);
-            printf(spriteAT[0][i]);
+            scr_puts(spriteAT[0][i]);
             move_to(term_width / 2 - 33 - 4 * (20 - n), ecart_term_y + ecart_AT + i);
-            printf(spriteAT[1][i]);
-            fflush(stdout);
+            scr_puts(spriteAT[1][i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -423,8 +424,8 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 4; i++)
         {
             move_to(term_width / 2 - 26 + 4 * (20 - n), ecart_term_y + 2 * ecart_AT + i);
-            printf(spriteAbs[i]);
-            fflush(stdout);
+            scr_puts(spriteAbs[i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -441,8 +442,8 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 4; i++)
         {
             move_to(term_width / 2 - 26 - 4 * (20 - n), ecart_term_y + 2 * ecart_AT + ecart_Abs + i);
-            printf(spriteRou[i]);
-            fflush(stdout);
+            scr_puts(spriteRou[i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -459,8 +460,8 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 4; i++)
         {
             move_to(term_width / 2 - 26 + 4 * (20 - n), ecart_term_y + 2 * ecart_AT + 2 * ecart_Abs + i);
-            printf(spriteDef[i]);
-            fflush(stdout);
+            scr_puts(spriteDef[i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -477,8 +478,8 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 4; i++)
         {
             move_to(term_width / 2 - 26 - 4 * (20 - n), ecart_term_y + 2 * ecart_AT + 3 * ecart_Abs + i);
-            printf(spriteEpi[i]);
-            fflush(stdout);
+            scr_puts(spriteEpi[i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -495,8 +496,8 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 4; i++)
         {
             move_to(term_width / 2 - 26 + 4 * (20 - n), ecart_term_y + 2 * ecart_AT + 4 * ecart_Abs + i);
-            printf(spriteSim[i]);
-            fflush(stdout);
+            scr_puts(spriteSim[i]);
+            scr_flush();
         }
         msleep(15);
     }
@@ -563,10 +564,10 @@ void anim_debut(int term_width, int term_height)
         for (int i = 0; i < 9; i++)
         {
             move_to(term_width / 2 - 44, term_height / 2 - 21 + i);
-            printf(spriteATARDES[0][i]);
+            scr_puts(spriteATARDES[0][i]);
             move_to(term_width / 2 - 44, term_height / 2 - 5 + i);
-            printf(spriteTuto[tutorial_variable][i]);
-            fflush(stdout);
+            scr_puts(spriteTuto[tutorial_variable][i]);
+            scr_flush();
         }
         if (c == 'q')
         {
@@ -590,26 +591,26 @@ void anim_debut(int term_width, int term_height)
                 {
                     for (int x = 0; x < term_width - ecartx; x++)
                     {
-                        printf(RESET);
+                        scr_printf(RESET);
                         move_to(ecartx + x, ecarty + y);
                         if ((x == 0 || x == term_width - 2 * ecartx) && y <= term_height - 2 * ecarty)
                         {
-                            printf("█");
+                            scr_printf("█");
                         }
                         else if (y == 0 && x <= term_width - 2 * ecartx)
                         {
-                            printf("▀");
+                            scr_printf("▀");
                         }
                         else if (y == term_height - 2 * ecarty && x <= term_width - 2 * ecartx)
                         {
-                            printf("▄");
+                            scr_printf("▄");
                         }
                     }
                 }
                 if (tutorial_page == 0)
                 {
                     move_to(term_width / 2 - 7, term_height / 2);
-                    printf("Yooo Easter Egg");
+                    scr_printf("Yooo Easter Egg");
                 }
                 if (tutorial_page == 1)
                 {
@@ -624,64 +625,64 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 4; i++)
                     {
                         move_to(term_width / 2 - 55, ecarty + 2 + i);
-                        printf(spriteWelcome[i]);
+                        scr_puts(spriteWelcome[i]);
                     }
                     int indentation = term_width / 2 - 35;
                     int ecart_en_plus_pour_aligner_txt = 9;
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("ANTIQUE TERMINAL : Absolute Routing Defense Epic Simulator");
+                    scr_printf("ANTIQUE TERMINAL : Absolute Routing Defense Epic Simulator");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("est un jeu de type \"Tower Defense\" dans lequel vous aller");
+                    scr_printf("est un jeu de type \"Tower Defense\" dans lequel vous aller");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("pouvoir poser des tourelles de défense afin de se protéger");
+                    scr_printf("pouvoir poser des tourelles de défense afin de se protéger");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("de la horde grandissante d'ennemis qui veulent sceller votre");
+                    scr_printf("de la horde grandissante d'ennemis qui veulent sceller votre");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Terminal Antique. Ainsi, votre objectif est de défendre le");
+                    scr_printf("Terminal Antique. Ainsi, votre objectif est de défendre le");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Saint Terminal des malicieux chenapans qui veulent récupérer");
+                    scr_printf("Saint Terminal des malicieux chenapans qui veulent récupérer");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("son pouvoir absolu ! Et pour ce faire, vous aller devoir");
+                    scr_printf("son pouvoir absolu ! Et pour ce faire, vous aller devoir");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("utiliser les flèches directionnelles de la Souveraineté");
+                    scr_printf("utiliser les flèches directionnelles de la Souveraineté");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("afin de déplacer votre seléction. Lorsque vous estimez la");
+                    scr_printf("afin de déplacer votre seléction. Lorsque vous estimez la");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("case seléctionnée digne d'obtenir une merveilleuse tourelle");
+                    scr_printf("case seléctionnée digne d'obtenir une merveilleuse tourelle");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("de défense, vous pouvez utiliser le pouvoir terminalogique");
+                    scr_printf("de défense, vous pouvez utiliser le pouvoir terminalogique");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("en appuyant sur \"espace\" pour arrêter et reprendre le temps !");
+                    scr_printf("en appuyant sur \"espace\" pour arrêter et reprendre le temps !");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Ce pouvoir dénommé ZA WARUDO possède d'autres outils extrêmement");
+                    scr_printf("Ce pouvoir dénommé ZA WARUDO possède d'autres outils extrêmement");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("intéressants, tel que la capacité d'échanger de l'EURO (€),");
+                    scr_printf("intéressants, tel que la capacité d'échanger de l'EURO (€),");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("l'Esprit Ultra Réaliste Obtenu des ennemis contre des tourelles !");
+                    scr_printf("l'Esprit Ultra Réaliste Obtenu des ennemis contre des tourelles !");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Cependant, pour invoquer l'intervention divine et par correspondance");
+                    scr_printf("Cependant, pour invoquer l'intervention divine et par correspondance");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("l'apparition d'une tourelle de défense, il est nécessaire");
+                    scr_printf("l'apparition d'une tourelle de défense, il est nécessaire");
                     move_to(indentation, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 3;
-                    printf("d'exécuter une action complexe, cachée depuis des générations...");
+                    scr_printf("d'exécuter une action complexe, cachée depuis des générations...");
                     char *spriteEntrer[4] =
                         {
                             " ▗▄▖ ▗▄▄▖ ▗▄▄▖ ▗▖ ▗▖▗▖  ▗▖▗▄▄▄▖▗▄▄▄▄▖     ▗▄▄▖▗▖ ▗▖▗▄▄▖     ▗▄▄▄▖▗▖  ▗▖▗▄▄▄▖▗▄▄▖ ▗▄▄▄▖▗▄▄▖ ",
@@ -693,9 +694,9 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 4; i++)
                     {
                         move_to(term_width / 2 - 45, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteEntrer[i]);
+                        scr_puts(spriteEntrer[i]);
                     }
-                    fflush(stdout);
+                    scr_flush();
                 }
                 if (tutorial_page == 2)
                 {
@@ -710,22 +711,22 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 4; i++)
                     {
                         move_to(term_width / 2 - 35, ecarty + 2 + i);
-                        printf(spriteElu[i]);
+                        scr_puts(spriteElu[i]);
                     }
                     int indentation2 = term_width / 2 - 40;
                     int ecart_en_plus_pour_aligner_txt = 9;
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("IMPOSSIBLE !!! Vous avez trouvé le code secret gardé depuis des anciens temps...");
+                    scr_printf("IMPOSSIBLE !!! Vous avez trouvé le code secret gardé depuis des anciens temps...");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Vous êtes donc vraiment... le SEUL, l'UNIQUE ! Vous êtes l'ELU !!!");
+                    scr_printf("Vous êtes donc vraiment... le SEUL, l'UNIQUE ! Vous êtes l'ELU !!!");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Très bien, si c'est le cas, j'ai le devoir de vous guider : Je vais vous expliquer");
+                    scr_printf("Très bien, si c'est le cas, j'ai le devoir de vous guider : Je vais vous expliquer");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("les utilités des différentes tourelles. Vous pouvez aussi remonter dans le tuto avec \"Supprimer\".");
+                    scr_printf("les utilités des différentes tourelles. Vous pouvez aussi remonter dans le tuto avec \"Supprimer\".");
                     char *spriteSniper[7] = {COLOR_SNIPER_BASE "     ▄██▄     ",
                                              "   ▄██████▄   ",
                                              " ▄████▀▀████▄ ",
@@ -736,20 +737,20 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteSniper[i]);
+                        scr_puts(spriteSniper[i]);
                     }
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Le Sniper" RESET " : La tourelle la plus basique, néanmoins si puissante, elle est dotée d'une");
+                    scr_printf("Le Sniper" RESET " : La tourelle la plus basique, néanmoins si puissante, elle est dotée d'une");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("grande portée et fait de gros dégats sur un ennemi malgré son temps de recharge assez long.");
+                    scr_printf("grande portée et fait de gros dégats sur un ennemi malgré son temps de recharge assez long.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Ses tirs sont d'une précision redoutable, et il sera sûrement un de vos meilleurs alliés.");
+                    scr_printf("Ses tirs sont d'une précision redoutable, et il sera sûrement un de vos meilleurs alliés.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Vous pouvez même améliorer ces tourelles en les re-sélectionnant et celle-ci peut être améliorée 2 fois !");
+                    scr_printf("Vous pouvez même améliorer ces tourelles en les re-sélectionnant et celle-ci peut être améliorée 2 fois !");
 
                     char *spriteInferno[7] = {COLOR_INFERNO_BASE "     ▄██▄     ",
                                               "  ▄▀█▀▀▀▀█▀▄  ",
@@ -761,18 +762,18 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteInferno[i]);
+                        scr_puts(spriteInferno[i]);
                     }
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("L'Inferno" RESET " : Une tourelle venue tout droit du 4ème cercle des enfers dans le but de vous aider");
+                    scr_printf("L'Inferno" RESET " : Une tourelle venue tout droit du 4ème cercle des enfers dans le but de vous aider");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("dans votre tâche, elle est capable d'immoler tout et n'importe quoi à l'aide de ses 4 canons lance-flamme.");
+                    scr_printf("dans votre tâche, elle est capable d'immoler tout et n'importe quoi à l'aide de ses 4 canons lance-flamme.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 4;
-                    printf("Ses attaques peuvent toucher jusqu'à 4 ennemis à la fois dans une portée d'une case autour de l'inferno.");
+                    scr_printf("Ses attaques peuvent toucher jusqu'à 4 ennemis à la fois dans une portée d'une case autour de l'inferno.");
 
                     char *spriteMortier[7] = {COLOR_MORTIER_BASE "  ██████████  ",
                                               "██ ▄█▀▀▀▀█▄ ██",
@@ -784,21 +785,21 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteMortier[i]);
+                        scr_puts(spriteMortier[i]);
                     }
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Le Mortier" RESET " : Une tourelle d'artillerie lourde utilisée pour envoyer d'énormes Terminal Shells");
+                    scr_printf("Le Mortier" RESET " : Une tourelle d'artillerie lourde utilisée pour envoyer d'énormes Terminal Shells");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("sur vos oppsants, explosant et attaquant ces pauvres gueux dans une zone considérable.");
+                    scr_printf("sur vos oppsants, explosant et attaquant ces pauvres gueux dans une zone considérable.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Cette tourelle est spécialisée pour le bombardement à distance, ainsi inefficace sur des cibles trop proches.");
+                    scr_printf("Cette tourelle est spécialisée pour le bombardement à distance, ainsi inefficace sur des cibles trop proches.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Un grand homme à un jour dit : Si vous n'avez pas de trébuchet, visez pour le mortier ! --Nodnach Imér");
+                    scr_printf("Un grand homme à un jour dit : Si vous n'avez pas de trébuchet, visez pour le mortier ! --Nodnach Imér");
 
                     char *spriteGatling[7] = {COLOR_GATLING_BASE "  ████▀▀████  ",
                                               "██  ██▄▄██  ██",
@@ -810,23 +811,23 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteGatling[i]);
+                        scr_puts(spriteGatling[i]);
                     }
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("La Gatling" RESET " : Une arme dignement importée d'un état inter-dimensionnel nommé \"USA\"");
+                    scr_printf("La Gatling" RESET " : Une arme dignement importée d'un état inter-dimensionnel nommé \"USA\"");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("et montée sur un socle de tourelle pour tirer en continu de manière très rapide sur des ennemis proches.");
+                    scr_printf("et montée sur un socle de tourelle pour tirer en continu de manière très rapide sur des ennemis proches.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Cette tourelle est extrêmement efficace contre les cibles singulières, surtout si elle est bien placée !");
+                    scr_printf("Cette tourelle est extrêmement efficace contre les cibles singulières, surtout si elle est bien placée !");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Un moins grand homme à un jour dit : RATATATATATATA ! --Zenitram Leafar");
+                    scr_printf("Un moins grand homme à un jour dit : RATATATATATATA ! --Zenitram Leafar");
 
-                    fflush(stdout);
+                    scr_flush();
                 }
 
                 if (tutorial_page == 3)
@@ -842,7 +843,7 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 4; i++)
                     {
                         move_to(term_width / 2 - 39, ecarty + 2 + i);
-                        printf(spriteTourelles[i]);
+                        scr_puts(spriteTourelles[i]);
                     }
                     int indentation2 = term_width / 2 - 40;
                     int ecart_en_plus_pour_aligner_txt = 9;
@@ -857,20 +858,20 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteFreezer[i]);
+                        scr_puts(spriteFreezer[i]);
                     }
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Le Freezer" RESET " : Une tourelle ayant pour seul objectif de tout geler et SUR-geler, elle");
+                    scr_printf("Le Freezer" RESET " : Une tourelle ayant pour seul objectif de tout geler et SUR-geler, elle");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("vous ferait perdre votre sang FROID, vous deviendriez GIVRÉS ! Zut, je voulais briser la GLACE,");
+                    scr_printf("vous ferait perdre votre sang FROID, vous deviendriez GIVRÉS ! Zut, je voulais briser la GLACE,");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("mais je crois que j'ai jeté un FROID. Enfin bon, elle ralentit vos ennemis, vous aidant");
+                    scr_printf("mais je crois que j'ai jeté un FROID. Enfin bon, elle ralentit vos ennemis, vous aidant");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("à gagner votre guerre FROIDE d'une manière FRISSONANTE ! HAH, Vous GLISSEZ avec moi ? (Aled)");
+                    scr_printf("à gagner votre guerre FROIDE d'une manière FRISSONANTE ! HAH, Vous GLISSEZ avec moi ? (Aled)");
 
                     char *spritePetrificateur[7] = {COLOR_PETRIFICATEUR_BASE "   ▄▄    ▄▄   ",
                                                     " ▄▀  █▄▄█  ▀▄ ",
@@ -882,21 +883,21 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spritePetrificateur[i]);
+                        scr_puts(spritePetrificateur[i]);
                     }
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Le Pétrificateur" RESET " : Une tourelle mystique qui, d'après la légende, aurait rendu fou son créateur");
+                    scr_printf("Le Pétrificateur" RESET " : Une tourelle mystique qui, d'après la légende, aurait rendu fou son créateur");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("de par sa complexité et sa beauté. De toute manière, c'est une tourelle très puissante pouvant figer ");
+                    scr_printf("de par sa complexité et sa beauté. De toute manière, c'est une tourelle très puissante pouvant figer ");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("vos adversaires sur place grâce à des forces mystérieuses. Il peut arrêter vos opposants dans un rayon ");
+                    scr_printf("vos adversaires sur place grâce à des forces mystérieuses. Il peut arrêter vos opposants dans un rayon ");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("plutôt rapproché. Une voix mystérieuse vous susurre :\"20 Pu-Diantre de Frame d'animations, Corneguidouille\"");
+                    scr_printf("plutôt rapproché. Une voix mystérieuse vous susurre :\"20 Pu-Diantre de Frame d'animations, Corneguidouille\"");
 
                     char *spriteBanque[7] = {COLOR_BANQUE_BASE "    ▄▄▄▄▄▄    ",
                                              " ▄███▄▄▄▄███▄ ",
@@ -908,33 +909,33 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 7; i++)
                     {
                         move_to(term_width / 2 - 56, ecarty + ecart_en_plus_pour_aligner_txt + i);
-                        printf(spriteBanque[i]);
+                        scr_puts(spriteBanque[i]);
                     }
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("La Banque" RESET " : L'arrivé du capitalisme dans le monde Terminalogique, qui distribue l'EURO à la populasse.");
+                    scr_printf("La Banque" RESET " : L'arrivé du capitalisme dans le monde Terminalogique, qui distribue l'EURO à la populasse.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("L'EURO étant un Esprit Ultra Réaliste Obtenu des ennemis, on pourrais se demander comment cette dite banque");
+                    scr_printf("L'EURO étant un Esprit Ultra Réaliste Obtenu des ennemis, on pourrais se demander comment cette dite banque");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("en génère à une vitesse affolante, mais je préfère ne pas y penser. De toute façon, elle nous génère moultes");
+                    scr_printf("en génère à une vitesse affolante, mais je préfère ne pas y penser. De toute façon, elle nous génère moultes");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 4;
-                    printf("ressources nous permettant de poser encore plus de tourelles, et ça, on apprécie.");
+                    scr_printf("ressources nous permettant de poser encore plus de tourelles, et ça, on apprécie.");
 
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Ceci étant dit, vous êtes fin prêt à démarrer votre ultime altercation avec les forces du mal !");
+                    scr_printf("Ceci étant dit, vous êtes fin prêt à démarrer votre ultime altercation avec les forces du mal !");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("Ainsi vous n'avez qu'à appuyer sur la touche suprême une dernière fois, et tout commenceras.");
+                    scr_printf("Ainsi vous n'avez qu'à appuyer sur la touche suprême une dernière fois, et tout commenceras.");
                     move_to(indentation2, ecarty + ecart_en_plus_pour_aligner_txt);
                     ecart_en_plus_pour_aligner_txt += 2;
-                    printf("N'oubliez pas, le power du ZA WARUDO (touche \"espace\") vous permet d'arrêter le temps et de réfléchir.");
+                    scr_printf("N'oubliez pas, le power du ZA WARUDO (touche \"espace\") vous permet d'arrêter le temps et de réfléchir.");
 
-                    fflush(stdout);
+                    scr_flush();
                 }
                 if (tutorial_page == 4)
                 {
@@ -949,7 +950,7 @@ void anim_debut(int term_width, int term_height)
                     for (int i = 0; i < 4; i++)
                     {
                         move_to(term_width / 2 - 18, ecarty + 2 + i);
-                        printf(spriteRappels[i]);
+                        scr_puts(spriteRappels[i]);
                     }
 
                     char *spriteSpeed[5][7] = {{SPEED_CONTROL COLOR_TOWER_SLOT_BG "         ▄█   ",
@@ -994,27 +995,27 @@ void anim_debut(int term_width, int term_height)
                         for (int i = 0; i < 7; i++)
                         {
                             move_to(term_width / 2 - 50 + nb_sprites * 20, ecarty + 10 + i);
-                            printf(spriteSpeed[nb_sprites][i]);
+                            scr_puts(spriteSpeed[nb_sprites][i]);
                         }
                         move_to(term_width / 2 - 50 + nb_sprites * 20 + 6, ecarty + 8);
-                        printf("x%d", (int)pow(2, nb_sprites));
+                        scr_printf("x%d", (int)pow(2, nb_sprites));
                     }
 
                     move_to(term_width / 2 - 25, ecarty + 20);
-                    printf(RESET "\"O\"/\"o\" pour accélérer, \"L\"/\"l\" pour ralentir");
+                    scr_printf(RESET "\"O\"/\"o\" pour accélérer, \"L\"/\"l\" pour ralentir");
 
                     move_to(term_width / 2 - 25, ecarty + 22);
-                    printf(RESET "\"S\" pour ouvrir le menu des sauvegardes ; ATTENTION !");
+                    scr_printf(RESET "\"S\" pour ouvrir le menu des sauvegardes ; ATTENTION !");
                     move_to(term_width / 2 - 25, ecarty + 24);
-                    printf(RESET "Il n'y a pas de demande de confirmation pour load/save");
+                    scr_printf(RESET "Il n'y a pas de demande de confirmation pour load/save");
                     move_to(term_width / 2 - 25, ecarty + 24);
-                    printf(RESET "(Load : \"Enter\"       Save : \"Space\"     Close : \"S\")");
+                    scr_printf(RESET "(Load : \"Enter\"       Save : \"Space\"     Close : \"S\")");
 
-                    fflush(stdout);
+                    scr_flush();
                 }
 
                 move_to(term_width - 6 - ecartx, term_height - 2 - ecarty);
-                printf("%d/4", tutorial_page);
+                scr_printf("%d/4", tutorial_page);
 
                 if (c == 10)
                 {
