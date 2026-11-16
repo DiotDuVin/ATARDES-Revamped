@@ -428,7 +428,6 @@ int main(int argc, char *argv[])
     // entiers qui gèrent la vitesse du jeu
     int game_speed_control = 1;
     int compteur_animation_game_speed = 10;
-    int game_speed_anim_pause = 0;
 
     // Le jeu tourne tant que la vie n'atteint pas 0
     while (gameStats.health > 0)
@@ -528,13 +527,11 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Icône en haut à droite : pause tant que la boutique est ouverte, sinon la vitesse actuelle.
+        // (avant, l'état "pause" restait bloqué si on fermait la boutique en achetant une tourelle)
         if (compteur_animation_game_speed < delta_t || selection_active)
         {
-            if (selection_active)
-            {
-                game_speed_anim_pause = 1;
-            }
-            drawGameSpeed(game_speed_control, width, game_speed_anim_pause);
+            drawGameSpeed(game_speed_control, width, selection_active);
             compteur_animation_game_speed += 10;
         }
 
@@ -585,7 +582,6 @@ int main(int argc, char *argv[])
                     fillBG(1, 1, width + 1, height + 1);
                     drawFullGrid(grid);
                     ligne = 3;
-                    game_speed_anim_pause = 0;
                 }
                 ligne = 3;
                 save_screen = !save_screen;
@@ -622,7 +618,6 @@ int main(int argc, char *argv[])
                     fillBG(1, 1, width + 1, height + 1);
                     drawFullGrid(grid);
                     ligne = 1;
-                    game_speed_anim_pause = 0;
                 }
                 ligne = 1;
                 selection_active = !selection_active;
