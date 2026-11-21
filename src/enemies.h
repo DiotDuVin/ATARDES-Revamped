@@ -44,7 +44,8 @@ struct Enemy
 
     bool has_effect;
     enum EffectType effet;
-    float puissance_effet;
+    float puissance_effet; // pour le boss électrique : rayon et durée de son effet sur les tourelles
+    float slow_factor;     // ralentissement appliqué par un Freezer (multiplicateur de vitesse)
     float temps_recharge;
     float last_hit;
     float temps_rest;

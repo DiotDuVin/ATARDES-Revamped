@@ -1,4 +1,5 @@
 #include "tower.h"
+#include "save.h"
 
 // Tous les bouts de programmes avec des # comme #if,#else... sont des morceaux de programmes utilisés uniquement sous l'activation du parametre BULLETS_ON dans ./src/tower.h
 
@@ -61,6 +62,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                             {
                                 for (int i = 0; i < ep.count; i++)
                                 {
+                                    if (ep.enemies[i].state != ENEMY_STATE_ALIVE || ep.enemies[i].hp <= 0)
+                                        continue;
                                     // Calcul du vecteur entre la tourelle et l’ennemi
                                     float dx = ep.enemies[i].grid_x - (x + 0.5); // on rajoute 0.5 afin que l'on calcule depuis le centre de la tourelle et pas depuis le coin supérieur gauche de la case.
                                     float dy = ep.enemies[i].grid_y - (y + 0.5);
@@ -70,7 +73,7 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                     {
                                         if (ep.enemies[i].type == ENEMY_BOSS_STUN && d <= ep.enemies[i].puissance_effet)
                                         {
-                                            grid.cells[x][y].turret.malus = true;
+                                            grid.cells[x][y].turret.has_malus = true;
                                             grid.cells[x][y].turret.puissance_malus = ep.enemies[i].puissance_effet;
                                         }
                                         else
@@ -90,6 +93,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                             {
                                 for (int i = 0; i < ep.count; i++)
                                 {
+                                    if (ep.enemies[i].state != ENEMY_STATE_ALIVE || ep.enemies[i].hp <= 0)
+                                        continue;
                                     // Calcul du vecteur entre la tourelle et l’ennemi
                                     float dx = ep.enemies[i].grid_x - (x + 0.5);
                                     float dy = ep.enemies[i].grid_y - (y + 0.5);
@@ -109,7 +114,7 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                             ep.enemies[i].has_effect = true;
                                             ep.enemies[i].effet = Slow;
                                             ep.enemies[i].temps_rest = lvl + 1;
-                                            ep.enemies[i].puissance_effet = grid.cells[x][y].turret.puissance_effet[lvl];
+                                            ep.enemies[i].slow_factor = grid.cells[x][y].turret.puissance_effet[lvl];
                                             enemies_hit++;
                                         }
                                     }
@@ -119,6 +124,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                             {
                                 for (int i = 0; i < ep.count; i++)
                                 {
+                                    if (ep.enemies[i].state != ENEMY_STATE_ALIVE || ep.enemies[i].hp <= 0)
+                                        continue;
                                     // Calcul du vecteur entre la tourelle et l’ennemi
                                     float dx = ep.enemies[i].grid_x - (x + 0.5);
                                     float dy = ep.enemies[i].grid_y - (y + 0.5);
@@ -150,6 +157,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                         {
                             for (int i = 0; i < ep.count; i++)
                             {
+                                if (ep.enemies[i].state != ENEMY_STATE_ALIVE || ep.enemies[i].hp <= 0)
+                                    continue;
                                 // Calcul du vecteur entre la tourelle et l’ennemi
                                 float dx = ep.enemies[i].grid_x - (x + 0.5);
                                 float dy = ep.enemies[i].grid_y - (y + 0.5);
@@ -178,13 +187,13 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                             float d_min = grid.cells[x][y].turret.splash[lvl];
                                             for (int j = 0; j < ep.count; j++)
                                             {
-                                                if (j != i)
+                                                if (j != i && ep.enemies[j].state == ENEMY_STATE_ALIVE)
                                                 {
-                                                    int d_enemy = sqrt(pow(ep.enemies[i].grid_x - ep.enemies[j].grid_x, 2) +
-                                                                       pow(ep.enemies[i].grid_y - ep.enemies[j].grid_y, 2));
+                                                    float d_enemy = sqrtf(powf(ep.enemies[i].grid_x - ep.enemies[j].grid_x, 2) +
+                                                                          powf(ep.enemies[i].grid_y - ep.enemies[j].grid_y, 2));
                                                     if (d_enemy < d_min)
                                                     {
-                                                        ep.enemies[j].hp -= grid.cells[x][y].turret.damage[lvl] / 2;
+                                                        ep.enemies[j].hp -= grid.cells[x][y].turret.damage[lvl] / 2 * rapport_speed_damage;
                                                     }
                                                 }
                                             }
@@ -227,7 +236,9 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                         {
                             grid.cells[x][y].turret.in_range = true;
                         }
-                        grid.cells[x][y].turret.compteur = 0;
+                        // On garde le temps "en trop" pour le prochain tir : la cadence reste exacte quel que soit le nombre d'images par seconde
+                        // (les tirs "en retard" ont déjà été comptés dans rapport_speed_damage)
+                        grid.cells[x][y].turret.compteur = fmodf(grid.cells[x][y].turret.compteur, grid.cells[x][y].turret.reload_delay[lvl]);
                     }
                 }
             }
@@ -587,7 +598,10 @@ void showSaveScreen(int ligne)
     for (int y = 3; y < 10; y++)
     {
         move_to(x0 + 1, y0 + y);
-        scr_printf("save_%d", y - 3);
+        if (saveExists(y - 3))
+            scr_printf("save_%d " COLOR_GREEN "(sauvegarde)" RESET, y - 3);
+        else
+            scr_printf("save_%d " COLOR_GRAY "(vide)" RESET, y - 3);
     }
 }
 

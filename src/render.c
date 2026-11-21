@@ -638,6 +638,11 @@ void scr_present(void)
         }
     }
 
+    if (term_x == -1 && term_y == -1)
+    {
+        screen.out_len = 0; // rien n'a changé : on n'envoie rien au terminal
+        return;
+    }
     out_str("\033[0m\033[?2026l");
     out_flush();
 }

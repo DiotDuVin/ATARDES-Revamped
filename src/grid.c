@@ -110,6 +110,9 @@ void genBasicPath(Grid *grid) // Génération du terrain par rapport a la seed (
     }
 
     int history_index = 0;
+    // Le point de départ de l'historique est la deuxième case du chemin (au cas où l'on y reviendrait en arrière)
+    historique[0][0] = chemin_x;
+    historique[0][1] = chemin_y;
 
     while (chemin_x != grid->width - 1) // Conditions pour la création d'une case chemin (POur ne pas que les chemins soient collés)
     {

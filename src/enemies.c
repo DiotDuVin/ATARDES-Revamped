@@ -1,4 +1,5 @@
 #include "enemies.h"
+#include <string.h>
 
 EnemyPool AllocEnemyPool() // pré-Alloue le tableau d’ennemis avec une taille initiale prédéterminée
 {
@@ -34,8 +35,10 @@ void freeEnemyPool(EnemyPool ep) // On libère le tableau des enemies.
 struct Enemy defEnemy(Grid grid, enum EnemyType type, int start_x, int start_y)
 {
     struct Enemy enemy;
+    memset(&enemy, 0, sizeof(enemy)); // tous les champs à 0 par défaut
     enemy.has_effect = false;
     enemy.is_boss = false;
+    enemy.slow_factor = 1;
     if (type == ENEMY_TUX) // Ennemi de base
     {
         enemy.type = ENEMY_TUX;
@@ -167,21 +170,21 @@ struct Enemy defEnemy(Grid grid, enum EnemyType type, int start_x, int start_y)
 
 struct Enemy *addEnemy(Grid grid, EnemyPool *ep, enum EnemyType type, int start_x, int start_y) // Ajoute un nouvel ennemi au tableau des enemies
 {
-    if (ep->count < ep->length)
+    if (ep->count >= ep->length)
     {
-        ep->enemies[ep->count] = defEnemy(grid, type, start_x, start_y);
-
-        return &(ep->enemies[ep->count++]);
+        // Le tableau est plein : on double sa taille (avant, le jeu s'arrêtait brutalement à 255 ennemis)
+        int new_length = ep->length * 2;
+        struct Enemy *bigger = realloc(ep->enemies, sizeof(struct Enemy) * new_length);
+        if (bigger == NULL)
+        {
+            printCritical("Failed to grow enemy pool");
+            exit(EXIT_FAILURE);
+        }
+        ep->enemies = bigger;
+        ep->length = new_length;
     }
-    else
-    {
-        // Dans le cas ou le nombre d’ennemis dépasse la capacité du tableau
-        printCritical("Overflow not yet implemented\n");
-        // free de tout automatique dans main.c/void cleanup()
-        exit(EXIT_FAILURE);
-
-        return NULL;
-    }
+    ep->enemies[ep->count] = defEnemy(grid, type, start_x, start_y);
+    return &(ep->enemies[ep->count++]);
 }
 
 // Cette fonction supprime les ennemis qui ont atteint l'objectif ou sont morts et réordonne le tableau
@@ -656,7 +659,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             else if (cell.x == grid.width - 1)
                 enemy->on_last_cell = true;
             else
-                return;
+                continue; // aucune case suivante (ne devrait pas arriver) : on passe à l'ennemi suivant au lieu d'arrêter toute la mise à jour
 
             enemy->previous_cell = cell;
         }
@@ -696,8 +699,8 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             }
             else if (enemy->effet == Slow)
             {
-                dx *= enemy->puissance_effet;
-                dy *= enemy->puissance_effet;
+                dx *= enemy->slow_factor;
+                dy *= enemy->slow_factor;
                 enemy->temps_rest -= dt_sec;
                 if (enemy->temps_rest <= 0)
                 {
@@ -740,12 +743,15 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             drawCell(enemy->previous_cell, grid);
             defragNeeded = true;
             gs->cash += enemy->money;
-            labels->labels[labels->count].counter = 0;
-            labels->labels[labels->count].duration = 2;
-            labels->labels[labels->count].text = enemy->money;
-            labels->labels[labels->count].x = (enemy->grid_x * (CELL_WIDTH + GAP) + 3);
-            labels->labels[labels->count].y = (enemy->grid_y * (CELL_HEIGHT + GAP / 2) + 2);
-            labels->count++;
+            if (labels->count < labels->size) // sinon on dépasserait du tableau (beaucoup d'ennemis tués en même temps)
+            {
+                labels->labels[labels->count].counter = 0;
+                labels->labels[labels->count].duration = 2;
+                labels->labels[labels->count].text = enemy->money;
+                labels->labels[labels->count].x = (enemy->grid_x * (CELL_WIDTH + GAP) + 3);
+                labels->labels[labels->count].y = (enemy->grid_y * (CELL_HEIGHT + GAP / 2) + 2);
+                labels->count++;
+            }
         }
     }
 
@@ -784,7 +790,7 @@ WavePattern getWaveByIndex(int waveIndex)
     }
     else if (waveIndex == 20)
     {
-        wp.min_spawns[BOSS_STUN] = 1;
+        wp.min_spawns[ENEMY_BOSS_STUN] = 1;
     }
     else if (waveIndex == 30)
     {
@@ -793,13 +799,13 @@ WavePattern getWaveByIndex(int waveIndex)
     else if (waveIndex == 40)
     {
         wp.min_spawns[ENEMY_TANK] = 1;
-        wp.min_spawns[BOSS_STUN] = 1;
+        wp.min_spawns[ENEMY_BOSS_STUN] = 1;
         wp.min_spawns[ENEMY_SLIME_BOSS] = 3;
     }
     else if (waveIndex == 50)
     {
         wp.min_spawns[ENEMY_TANK] = 3;
-        wp.min_spawns[BOSS_STUN] = 3;
+        wp.min_spawns[ENEMY_BOSS_STUN] = 3;
         wp.min_spawns[ENEMY_SLIME_BOSS] = 10;
     }
 
@@ -936,6 +942,11 @@ void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
     int argent_cumul = 0;
     FILE *fptr;
     fptr = fopen("testing/waves.csv", "w");
+    if (fptr == NULL)
+    {
+        printf("Impossible de créer testing/waves.csv : lance le jeu depuis la racine du projet.\n");
+        return;
+    }
     fprintf(fptr, "wave,hp,hpps,duration,argentCumul,ennemiesSpawned,");
     fprintf(fptr, "TUX,");
     fprintf(fptr, "SPEED,");

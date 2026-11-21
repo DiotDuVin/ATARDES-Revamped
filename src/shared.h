@@ -1,6 +1,7 @@
 #pragma once
 
-#define _POSIX_C_SOURCE 199309L
+#define _DEFAULT_SOURCE // donne accès à SIGWINCH, select, etc.
+#define _POSIX_C_SOURCE 200809L
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -36,6 +37,12 @@ CONFIGURATION
 // maintenant l'affichage est quasi instantané, donc on fixe le rythme ici.
 #define INTRO_FRAME_MS 12
 #define WAVE_DELAY 0.5 // (secondes)
+
+// Pas maximal de la simulation (en secondes de jeu). À grande vitesse, une image est découpée
+// en plusieurs pas de cette taille pour que les ennemis ne "sautent" pas de cases.
+#define MAX_SIM_STEP (1.0f / 60.0f)
+// Temps réel maximal pris en compte pour une image (évite un énorme saut si le jeu a été bloqué)
+#define MAX_REAL_DT 0.1f
 
 #define CELL_WIDTH 18
 #define CELL_HEIGHT 9
@@ -169,6 +176,7 @@ void freeLabels(Labels labels);
 */
 
 int msleep(long ms);
+void nsleep_seconds(double seconds);
 
 /*
 #############

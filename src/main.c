@@ -6,6 +6,7 @@
 #include "save.h"
 
 #include <string.h>
+#include <sys/select.h>
 
 /*
 #################
@@ -113,10 +114,25 @@ void handle_enter_key()
     drawFullGrid(grid);
 }
 
+// Lit un caractère s'il arrive dans les `timeout_ms` millisecondes, sinon renvoie 0.
+// (évite de bloquer le jeu si l'utilisateur appuie sur Échap seul)
+int read_key_timeout(int timeout_ms)
+{
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    struct timeval tv = {0, timeout_ms * 1000};
+    if (select(STDIN_FILENO + 1, &set, NULL, NULL, &tv) > 0)
+        return getchar();
+    return 0;
+}
+
 void handle_arrow_keys()
 {
-    getchar(); // [
-    char c = getchar();
+    // Une flèche envoie 3 caractères : \033 [ A/B/C/D. Le \033 a déjà été lu.
+    if (read_key_timeout(20) != '[')
+        return; // touche Échap seule (ou autre séquence) : on ignore
+    char c = read_key_timeout(20);
     int cell_x = selected_cell_x;
     int cell_y = selected_cell_y;
     bool up = c == 'A';
@@ -304,6 +320,76 @@ void cleanup()
     }
 }
 
+// Mis à vrai par le signal SIGWINCH quand la taille du terminal change
+volatile sig_atomic_t terminal_resized = 0;
+void onResize(int sig)
+{
+    (void)sig;
+    terminal_resized = 1;
+}
+
+// Redessine tout l'écran après un changement de taille du terminal
+void handleResize()
+{
+    terminal_resized = 0;
+    scr_shutdown();
+    clear_screen();
+    checkTerminalSize(&width, &height); // bloque tant que le terminal est trop petit
+    clear_screen();
+    fflush(stdout);
+    if (!scr_init(width, height))
+    {
+        printCritical("Failed to allocate screen buffer");
+        exit(EXIT_FAILURE);
+    }
+    fillBG(1, 1, width + 1, height + 1);
+    drawFullGrid(grid);
+}
+
+// Petite fenêtre centrée affichée quand la partie est perdue
+void showGameOver()
+{
+    int w = 60, h = 9;
+    int x0 = width / 2 - w / 2;
+    int y0 = height / 2 - h / 2;
+    for (int y = 0; y < h; y++)
+    {
+        move_to(x0, y0 + y);
+        scr_printf(RESET COLOR_RED);
+        for (int x = 0; x < w; x++)
+        {
+            if (x == 0 || x == w - 1)
+                scr_printf("█");
+            else if (y == 0)
+                scr_printf("▀");
+            else if (y == h - 1)
+                scr_printf("▄");
+            else
+                scr_printf(" ");
+        }
+    }
+    move_to(x0 + w / 2 - 8, y0 + 2);
+    scr_printf(BOLD COLOR_RED "PARTIE TERMINÉE" RESET);
+    move_to(x0 + w / 2 - 12, y0 + 4);
+    scr_printf("Tu as tenu %d vague%s", waveSystem.current_wave_index, waveSystem.current_wave_index > 1 ? "s" : "");
+    move_to(x0 + w / 2 - 15, y0 + 6);
+    scr_printf(COLOR_GRAY "Appuie sur Entrée pour quitter" RESET);
+    scr_flush();
+
+    // On vide les touches déjà appuyées pendant la partie, puis on attend Entrée, Espace ou q
+    while (get_key_press() != 0)
+        ;
+    while (true)
+    {
+        int c = get_key_press();
+        if (c == 10 || c == ' ' || c == 'q' || c == 'Q')
+            break;
+        if (terminal_resized)
+            handleResize();
+        msleep(20);
+    }
+}
+
 void onSignal(int sig)
 {
     (void)sig;
@@ -326,6 +412,10 @@ int main(int argc, char *argv[])
     sigemptyset(&act.sa_mask);
     sigaction(SIGINT, &act, NULL);
     sigaction(SIGTERM, &act, NULL);
+    struct sigaction resize_act = {0};
+    resize_act.sa_handler = &onResize;
+    sigemptyset(&resize_act.sa_mask);
+    sigaction(SIGWINCH, &resize_act, NULL);
 
     srand(time(NULL));
 
@@ -421,6 +511,10 @@ int main(int argc, char *argv[])
     // Affichage intégral de la grille
     drawFullGrid(grid);
 
+    // Le chronomètre démarre au début de la partie (après l'intro et le tutoriel)
+    clock_gettime(CLOCK_MONOTONIC, &prev_time);
+    time_start = prev_time.tv_sec;
+
     // size_t est un int de capacité plus élevée.
     size_t frame_index = 0;
     int fps = 0;
@@ -435,19 +529,29 @@ int main(int argc, char *argv[])
         // Gestion du temps
         struct timespec current_time;
         clock_gettime(CLOCK_MONOTONIC, &current_time);
-        // Ici on calcule dt (écart de temps entre cette frame et la précédente)
-        float delta_t = (current_time.tv_nsec - prev_time.tv_nsec) / 1000000000.0 + (current_time.tv_sec - prev_time.tv_sec);
-
-        delta_t *= game_speed_control;
-
+        // Temps réel écoulé depuis l'image précédente (en secondes)
+        float real_dt = (current_time.tv_nsec - prev_time.tv_nsec) / 1000000000.0 + (current_time.tv_sec - prev_time.tv_sec);
         prev_time = current_time;
-        // On attends le temps restant pour avoir un FPS fixe
-        if (delta_t < 1.0 / TARGET_FPS)
-            msleep((1.0 / TARGET_FPS - delta_t) * 1000);
-        if (delta_t > 3.0 / TARGET_FPS) // ici on évite d'avoir un dt trop énorme ce qui peut poser des problèmes
-            delta_t = 3.0 / TARGET_FPS;
-        if (1.0 / delta_t < TARGET_FPS * 2)
-            fps = 1.0f / delta_t;
+
+        if (real_dt > 0)
+            fps = fps * 0.9f + 0.1f * (1.0f / real_dt); // moyenne glissante pour un affichage stable
+
+        // Si le jeu a été bloqué un moment (ex: terminal en arrière-plan), on évite un énorme saut dans le temps
+        if (real_dt > MAX_REAL_DT)
+            real_dt = MAX_REAL_DT;
+
+        // Temps de jeu écoulé : c'est ici qu'agit la vitesse (x1 à x16).
+        // Avant, le plafond était appliqué APRÈS cette multiplication, ce qui limitait la vitesse réelle à environ x4.
+        float game_dt = real_dt * game_speed_control;
+
+        // Pour garder une simulation précise à grande vitesse, on découpe le temps de jeu en petits pas
+        int sim_steps = (int)ceilf(game_dt / MAX_SIM_STEP);
+        if (sim_steps < 1)
+            sim_steps = 1;
+        float delta_t = game_dt / sim_steps;
+
+        if (terminal_resized)
+            handleResize();
 
         frame_index++;
 
@@ -459,45 +563,46 @@ int main(int argc, char *argv[])
 
         if (!selection_active && !save_screen) // si la sélection est active, le jeu est en pause, on exécute pas le code de la frame
         {
+            // On efface les zones où se trouvaient les ennemis à l'image précédente (et on redessine les tourelles)
 #if BULLETS_ON
-            // Cas ou les misilles sont activées
-
-            if (frame_index % 50 == 0) // Toutes les 50 frames, on efface l'écran pour supprimer les artefacts restants
+            if (frame_index % 50 == 0) // Avec les missiles, on efface tout l'écran régulièrement pour supprimer leurs traces
             {
                 fillBG(1, 1, width + 1, height + 1);
                 drawFullGrid(grid);
             }
-            else // Le reste du temps, on efface uniquement les cases du chemin qui ont été mises a jour
-            {
+            else
+#endif
                 clearUsedPath(grid, enemyPool);
-            }
 
-            // Update towers gère l'affichage et les animations des tourelles, il s'occupe aussi de tirer sur les ennemis a portée le moment venu pour chacune des tourelles
-            updateTowers(grid, enemyPool, &bulletPool, delta_t, &gameStats);
-
-            // Si les bullets sont activées, on les mets a jour (gestion de leur mouvement)
-            updateBullets(&bulletPool, delta_t);
-            // Puis on les affiche
-            drawBullets(bulletPool);
+            // Simulation du jeu, en plusieurs petits pas si la vitesse est élevée
+            bool wave_ended = false;
+            for (int step = 0; step < sim_steps && gameStats.health > 0; step++)
+            {
+                // Les tourelles tirent sur les ennemis à portée
+#if BULLETS_ON
+                updateTowers(grid, enemyPool, &bulletPool, delta_t, &gameStats);
+                updateBullets(&bulletPool, delta_t);
 #else
-            // Si les bullets ne sont pas activées, on gère uniquement les tourelles
-            updateTowers(grid, enemyPool, delta_t, &gameStats);
-            clearUsedPath(grid, enemyPool);
+                updateTowers(grid, enemyPool, delta_t, &gameStats);
+#endif
+                // Mise à jour des labels (suppression des vieux)
+                updateLabels(&labels, delta_t);
+                // Apparition des ennemis de la vague
+                if (updateWaveSystem(&waveSystem, grid, &enemyPool, delta_t, &gameStats) == -2)
+                    wave_ended = true;
+                // Déplacement des ennemis
+                updateEnemies(&enemyPool, grid, &gameStats, &labels, delta_t);
+            }
+#if BULLETS_ON
+            drawBullets(bulletPool);
 #endif
 
-            // Mis a jour des labels (suppression des vieux)
-            updateLabels(&labels, delta_t);
-            drawLabels(labels);
-
-            int wave_status = updateWaveSystem(&waveSystem, grid, &enemyPool, delta_t, &gameStats);
-            if (wave_status == -2)
+            if (wave_ended)
             {
                 fillBG(1, 1, width + 1, height + 1);
                 drawFullGrid(grid);
             }
-
-            // Mise à jour des ennemis existants
-            updateEnemies(&enemyPool, grid, &gameStats, &labels, delta_t);
+            drawLabels(labels);
             // Affichage des ennemis
             drawEnemies(enemyPool, grid);
 
@@ -575,7 +680,7 @@ int main(int argc, char *argv[])
                 saveProgress(grid, gameStats, waveSystem.current_wave_index, 0);
                 break;
             }
-            if (c == 's' && !selection_active)
+            if ((c == 's' || c == 'S') && !selection_active)
             {
                 if (save_screen)
                 {
@@ -634,22 +739,37 @@ int main(int argc, char *argv[])
             }
             if (save_screen)
             {
-                showSaveScreen(ligne);
-                if (c == 10)
+                int slot = ligne - 3; // les emplacements save_0 à save_6 sont sur les lignes 3 à 9
+                if (c == 10)          // Entrée : charger
                 {
-                    char save_name[32];
-                    snprintf(save_name, sizeof(save_name), "save_%d", ligne);
-                    loadProgress(save_name, &grid, &gameStats, &waveSystem, &enemyPool, &labels);
-                    fillBG(1, 1, width + 1, height + 1);
-                    drawFullGrid(grid);
-                    save_screen = !save_screen;
+                    if (loadProgress(slot, &grid, &gameStats, &waveSystem, &enemyPool, &labels))
+                    {
+                        // La grille chargée peut être plus petite : on remet la sélection sur une case valide
+                        selected_cell_x = 0;
+                        selected_cell_y = 0;
+                        prev_selected_x = prev_selected_y = 0;
+                        grid.cells[0][0].selected = true;
+                        fillBG(1, 1, width + 1, height + 1);
+                        drawFullGrid(grid);
+                        save_screen = false;
+                    }
                 }
-                if (c == ' ')
+                else if (c == ' ') // Espace : sauvegarder
                 {
-                    saveProgress(grid, gameStats, waveSystem.current_wave_index, ligne-3);
+                    saveProgress(grid, gameStats, waveSystem.current_wave_index, slot);
                 }
+                if (save_screen)
+                    showSaveScreen(ligne); // affiché après l'action pour que l'état des emplacements soit à jour
             }
         }
+
+        // Limiteur d'images : on dort le temps restant pour ne pas dépasser TARGET_FPS images par seconde
+        // (sinon, avec le nouveau moteur d'affichage très rapide, le jeu utiliserait 100% d'un processeur)
+        struct timespec frame_end;
+        clock_gettime(CLOCK_MONOTONIC, &frame_end);
+        float frame_time = (frame_end.tv_nsec - current_time.tv_nsec) / 1000000000.0 + (frame_end.tv_sec - current_time.tv_sec);
+        if (frame_time < 1.0 / TARGET_FPS)
+            nsleep_seconds(1.0 / TARGET_FPS - frame_time);
     }
 
     /*
@@ -657,6 +777,9 @@ int main(int argc, char *argv[])
     FIN DE LA PARTIE
     ################
     */
+
+    if (gameStats.health <= 0)
+        showGameOver();
 
     // Les free se trouvent dans la fonction cleanup, appelée automatiquement à la sortie (atexit)
     return 0;

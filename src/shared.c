@@ -8,6 +8,17 @@ int msleep(long ms) // Fonction de repos (temps pendant lequel le terminal ne li
     return nanosleep(&ts, &ts);
 }
 
+// Pause précise en secondes (msleep arrondit à la milliseconde)
+void nsleep_seconds(double seconds)
+{
+    if (seconds <= 0)
+        return;
+    struct timespec ts;
+    ts.tv_sec = (time_t)seconds;
+    ts.tv_nsec = (long)((seconds - ts.tv_sec) * 1e9);
+    nanosleep(&ts, NULL);
+}
+
 void updateLabels(Labels *labels, float dt) // Mets a jour les labels (l'argent drop par les monstres)
 {
     for (int i = 0; i < labels->count; i++)

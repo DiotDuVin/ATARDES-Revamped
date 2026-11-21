@@ -1,135 +1,113 @@
 #include "save.h"
 
-const char *save_path = "./save/";
+static const char *save_dir = "./save";
 
-bool saveProgress(Grid grid, GameStats gameStats, int waveIndex, int save_index)
+// Écrit dans `out` le chemin du fichier de l'emplacement `slot`
+static void savePath(char *out, size_t size, int slot)
 {
-    char save_name[64];
-    sprintf(save_name, "save_%d.bin", save_index);
+    snprintf(out, size, "%s/save_%d.bin", save_dir, slot);
+}
 
+bool saveExists(int slot)
+{
+    char path[64];
+    savePath(path, sizeof(path), slot);
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool saveProgress(Grid grid, GameStats gameStats, int waveIndex, int slot)
+{
+    if (slot < 0 || slot >= SAVE_SLOTS)
+        return false;
+
+    // Création du dossier de sauvegarde s'il n'existe pas
     struct stat folder_stats;
-    if (stat(save_path, &folder_stats) != 0)
+    if (stat(save_dir, &folder_stats) != 0)
     {
-        mkdir(save_path, 0774);
+        if (mkdir(save_dir, 0775) != 0)
+            return false;
     }
     else if (!S_ISDIR(folder_stats.st_mode))
     {
         return false;
     }
 
-    char *file_path = alloca(strlen(save_path) + strlen(save_name) + 1);
-    memset(file_path, 0, strlen(save_path) + strlen(save_name) + 1);
-
-    strcat(file_path, save_path);
-    strcat(file_path, save_name);
-
-    FILE *file = fopen(file_path, "wb");
+    char path[64];
+    savePath(path, sizeof(path), slot);
+    FILE *file = fopen(path, "wb");
     if (file == NULL)
-    {
-        fprintf(stderr, "Failed to write save file to path %s", file_path);
-        return 0;
-    }
+        return false; // pas de message : on est en plein jeu, il casserait l'affichage
 
-    // Write generic data
+    // Données générales (le pointeur vers les cases n'a pas de sens dans un fichier)
     struct SerializedGameData data;
+    memset(&data, 0, sizeof(data));
     data.grid = grid;
     data.grid.cells = NULL;
     data.gameStats = gameStats;
     data.waveIndex = waveIndex;
-    size_t result = fwrite(&data, sizeof(struct SerializedGameData), 1, file);
+    bool ok = fwrite(&data, sizeof(data), 1, file) == 1;
 
-    if (result == 0)
-        return 0;
+    // Contenu de la grille, colonne par colonne
+    for (int x = 0; ok && x < grid.width; x++)
+        ok = fwrite(grid.cells[x], sizeof(struct Cell), grid.height, file) == (size_t)grid.height;
 
-    for (int x = 0; x < grid.width; x++)
-    {
-        result = fwrite(grid.cells[x], sizeof(struct Cell), grid.height, file);
-        if (result == 0)
-            return 0;
-    }
-
-    return 1;
+    // fclose écrit réellement les données sur le disque (avant, le fichier n'était jamais fermé :
+    // une sauvegarde rechargée dans la même partie pouvait être incomplète)
+    if (fclose(file) != 0)
+        ok = false;
+    return ok;
 }
 
-bool loadProgress(const char *save_name, Grid *grid, GameStats *gameStats, WaveSystem *waveSystem, EnemyPool *enemyPool, Labels *labels)
+bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSystem, EnemyPool *enemyPool, Labels *labels)
 {
-    char *file_path = alloca(strlen(save_path) + strlen(save_name) + 1 + 4);
-    memset(file_path, 0, strlen(save_path) + strlen(save_name) + 1 + 4);
+    if (slot < 0 || slot >= SAVE_SLOTS)
+        return false;
 
-    strcat(file_path, save_path);
-    strcat(file_path, save_name);
-    strcat(file_path, ".bin");
-
-    FILE *file = fopen(file_path, "rb");
+    char path[64];
+    savePath(path, sizeof(path), slot);
+    FILE *file = fopen(path, "rb");
     if (file == NULL)
-    {
-        fprintf(stderr, "Failed to write save file to path %s", file_path);
-        return 0;
-    }
+        return false;
 
     struct SerializedGameData data;
-
-    size_t n = fread(&data, sizeof(struct SerializedGameData), 1, file);
-
-    if (n == 0 || data.grid.width > grid->width || data.grid.height > grid->height)
+    if (fread(&data, sizeof(data), 1, file) != 1                         //
+        || data.grid.width <= 0 || data.grid.height <= 0                 //
+        || data.grid.width > grid->width || data.grid.height > grid->height) // la grille doit tenir dans le terminal actuel
     {
-        return 0;
+        fclose(file);
+        return false;
     }
+
+    // On lit d'abord tout dans une nouvelle grille : si le fichier est abîmé, la partie en cours n'est pas touchée
+    Grid loaded = data.grid;
+    allocateGridCells(&loaded);
+    bool ok = true;
+    for (int x = 0; ok && x < loaded.width; x++)
+        ok = fread(loaded.cells[x], sizeof(struct Cell), loaded.height, file) == (size_t)loaded.height;
+    fclose(file);
+
+    if (!ok)
+    {
+        for (int x = 0; x < loaded.width; x++)
+            free(loaded.cells[x]);
+        free(loaded.cells);
+        return false;
+    }
+
+    for (int x = 0; x < loaded.width; x++)
+        for (int y = 0; y < loaded.height; y++)
+            loaded.cells[x][y].selected = false;
+
+    // Tout est valide : on remplace la partie en cours
+    for (int x = 0; x < grid->width; x++)
+        free(grid->cells[x]);
+    free(grid->cells);
+    *grid = loaded;
 
     *gameStats = data.gameStats;
     switchToWave(waveSystem, data.waveIndex);
-
-    freeGrid(*grid);
-    *grid = data.grid;
-    allocateGridCells(grid);
-    for (int x = 0; x < grid->width; x++)
-    {
-        n = fread(grid->cells[x], sizeof(struct Cell), grid->height, file);
-        if (n == 0)
-            exit(1);
-
-        for (int y = 0; y < grid->height; y++)
-        {
-            grid->cells[x][y].selected = false;
-        }
-    }
-
     enemyPool->count = 0;
     labels->count = 0;
-
-    return 1;
-}
-
-char **listSaves(int *cnt)
-{
-    // struct dirent *dir;
-    DIR *dir = opendir(save_path);
-    if (dir == NULL)
-    {
-        return NULL;
-    }
-    struct dirent *file_info;
-    // char saves[100][256];
-    char **saves = calloc(100, sizeof(char *));
-    if (saves == NULL)
-    {
-        closedir(dir);
-        return NULL;
-    }
-    // memset(saves, 0, sizeof(saves));
-
-    *cnt = 0;
-    while (*cnt < 100 && (file_info = readdir(dir)) != NULL)
-    {
-        if (strncmp(file_info->d_name, ".", 1) == 0 || strncmp(file_info->d_name, "..", 2) == 0)
-            continue;
-        int n = strlen(file_info->d_name) + 1;
-        saves[*cnt] = malloc(n);
-        memset(saves[*cnt], 0, n);
-        strcpy(saves[*cnt], file_info->d_name);
-        (*cnt)++;
-    }
-    closedir(dir);
-
-    return saves;
+    return true;
 }
