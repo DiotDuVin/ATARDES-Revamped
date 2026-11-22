@@ -439,6 +439,27 @@ static void out_str(const char *s)
     out_append(s, strlen(s));
 }
 
+static void out_attr(Attr attr);
+
+// N'envoie que ce qui change entre deux jeux de couleurs (souvent seulement le fond ou le texte) :
+// le pixel art change de couleur à presque chaque caractère, cela divise le volume envoyé
+static void out_attr_change(Attr from, Attr to)
+{
+    if (from.flags != to.flags || from.fg == -2 || (from.fg != to.fg && to.fg == COLOR_DEFAULT) || (from.bg != to.bg && to.bg == COLOR_DEFAULT))
+    {
+        out_attr(to); // changement de style, état inconnu ou retour à la couleur par défaut : tout est renvoyé
+        return;
+    }
+    char seq[48];
+    if (from.fg != to.fg && from.bg != to.bg)
+        snprintf(seq, sizeof(seq), "\033[38;5;%d;48;5;%dm", to.fg, to.bg);
+    else if (from.fg != to.fg)
+        snprintf(seq, sizeof(seq), "\033[38;5;%dm", to.fg);
+    else
+        snprintf(seq, sizeof(seq), "\033[48;5;%dm", to.bg);
+    out_str(seq);
+}
+
 static void out_attr(Attr attr)
 {
     char seq[64];
@@ -533,6 +554,30 @@ void scr_invalidate(void)
     }
 }
 
+bool scr_peek(int x, int y, char *glyph, size_t size, short *fg, short *bg)
+{
+    if (!screen.active || !in_bounds(x, y) || size == 0)
+        return false;
+    const ScreenCell *cell = back_at(x, y);
+    snprintf(glyph, size, "%s", cell->glyph);
+    *fg = cell->attr.fg;
+    *bg = cell->attr.bg;
+    return true;
+}
+
+void scr_put_cell(int x, int y, const char *glyph, short fg, short bg)
+{
+    if (!screen.active || !in_bounds(x, y))
+        return;
+    break_wide_char(x, y);
+    ScreenCell *cell = back_at(x, y);
+    snprintf(cell->glyph, GLYPH_MAX, "%s", glyph);
+    cell->attr.fg = fg;
+    cell->attr.bg = bg;
+    cell->attr.flags = 0;
+    cell->width = CELL_NARROW;
+}
+
 unsigned long scr_attr_save(void)
 {
     // fg et bg (de -1 à 255) sont décalés de 1 pour être positifs, puis rangés dans un seul entier
@@ -624,12 +669,15 @@ void scr_present(void)
             if (term_x != x || term_y != y)
             {
                 char seq[32];
-                snprintf(seq, sizeof(seq), "\033[%d;%dH", y, x);
+                if (term_y == y)
+                    snprintf(seq, sizeof(seq), "\033[%dG", x); // même ligne : on ne donne que la colonne (plus court)
+                else
+                    snprintf(seq, sizeof(seq), "\033[%d;%dH", y, x);
                 out_str(seq);
             }
             if (!attr_equal(term_attr, b->attr))
             {
-                out_attr(b->attr);
+                out_attr_change(term_attr, b->attr);
                 term_attr = b->attr;
             }
             out_str(b->glyph[0] != '\0' ? b->glyph : " ");

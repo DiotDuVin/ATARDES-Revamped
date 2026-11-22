@@ -56,6 +56,15 @@ void scr_present(void);
 // scr_present() si le moteur est actif, sinon fflush(stdout).
 void scr_flush(void);
 
+// Lit ce qui est déjà dessiné à la position (x, y) du back buffer : caractère et couleurs (-1 = couleur par défaut).
+// Renvoie false si le moteur est inactif ou la position hors de l'écran.
+#include <stddef.h>
+bool scr_peek(int x, int y, char *glyph, size_t size, short *fg, short *bg);
+
+// Écrit directement un caractère et ses couleurs (-1 = par défaut) dans le back buffer, sans passer par printf :
+// beaucoup plus rapide pour le pixel art, qui écrit des milliers de caractères par image.
+void scr_put_cell(int x, int y, const char *glyph, short fg, short bg);
+
 // Mémorise / restaure les couleurs courantes de scr_printf (utile pour dessiner sur plusieurs lignes)
 unsigned long scr_attr_save(void);
 void scr_attr_restore(unsigned long saved);

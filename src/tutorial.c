@@ -4,6 +4,7 @@
 
 #include "tower.h"
 #include "enemies.h"
+#include "pixelart.h"
 
 #include <string.h>
 
@@ -25,55 +26,6 @@ Pour ajouter du contenu, il suffit d'ajouter un bloc dans un des tableaux ci-des
 ##############
 */
 
-static const char *spriteSniper[7] = {COLOR_SNIPER_BASE "     ▄██▄     ",
-                                             "   ▄██████▄   ",
-                                             " ▄████▀▀████▄ ",
-                                             COLOR_SNIPER_HEAD "<" COLOR_SNIPER_CANNON "===" COLOR_SNIPER_BASE "█ " COLOR_SNIPER_CANNON "[]" COLOR_SNIPER_BASE " █████",
-                                             " ▀████▄▄████▀ ",
-                                             "   ▀██████▀   ",
-                                             "     ▀██▀     "};
-static const char *spriteInferno[7] = {COLOR_INFERNO_BASE "     ▄██▄     ",
-                                              "  ▄▀█▀▀▀▀█▀▄  ",
-                                              " ▄█▀ " COLOR_INFERNO_FIRE1 "▄" COLOR_INFERNO_FIRE2 "▀ ▄" COLOR_INFERNO_BASE " ▀█▄ ",
-                                              "███  " COLOR_INFERNO_FIRE1 "▀▄█" COLOR_INFERNO_FIRE2 " ▄" COLOR_INFERNO_BASE " ███",
-                                              " ▀█▄ " COLOR_INFERNO_TORCH "▀██▀" COLOR_INFERNO_BASE " ▄█▀ ",
-                                              "  ▀▄█▄▄▄▄█▄▀  ",
-                                              "     ▀██▀     "};
-static const char *spriteMortier[7] = {COLOR_MORTIER_BASE "  ██████████  ",
-                                              "██ ▄█▀▀▀▀█▄ ██",
-                                              "███▀ " COLOR_MORTIER_FIRING "▄██▄" COLOR_MORTIER_BASE " ▀███",
-                                              "███ " COLOR_MORTIER_FIRING "██" COLOR_MORTIER_FIRING_CENTER "██" COLOR_MORTIER_FIRING "██" COLOR_MORTIER_BASE " ███",
-                                              "███▄ " COLOR_MORTIER_FIRING "▀██▀" COLOR_MORTIER_BASE " ▄███",
-                                              "██ ▀█▄▄▄▄█▀ ██",
-                                              "  ██████████  "};
-static const char *spriteGatling[7] = {COLOR_GATLING_BASE "  ████▀▀████  ",
-                                              "██  ██▄▄██  ██",
-                                              "█████▀  ▀█████",
-                                              "█  █  " COLOR_GATLING_FIRING "██" COLOR_GATLING_BASE "  █  █",
-                                              "█████▄  ▄█████",
-                                              "██  ██▀▀██  ██",
-                                              "  ████▄▄████  "};
-static const char *spriteFreezer[7] = {COLOR_FREEZER_BASE "      ██      ",
-                                              " ▄  ██▀▀██  ▄ ",
-                                              "  ██▀  " COLOR_FREEZER_FIRING_CENTER "▄" COLOR_FREEZER_BASE " ▀██  ",
-                                              "███  " COLOR_FREEZER_FIRING_CENTER "▀  ▄" COLOR_FREEZER_BASE "  ███",
-                                              "  ██▄ " COLOR_FREEZER_FIRING_CENTER "▀" COLOR_FREEZER_BASE "  ▄██  ",
-                                              " ▀  ██▄▄██  ▀ ",
-                                              "      ██      "};
-static const char *spritePetrificateur[7] = {COLOR_PETRIFICATEUR_BASE "   ▄▄    ▄▄   ",
-                                                    " ▄▀  █▄▄█  ▀▄ ",
-                                                    " ▀▄▄" COLOR_PETRIFICATEUR_FIRING "▄█  █▄" COLOR_PETRIFICATEUR_BASE "▄▄▀ ",
-                                                    "   █  " COLOR_PETRIFICATEUR_SORON "██" COLOR_PETRIFICATEUR_BASE "  █   ",
-                                                    " ▄▀▀" COLOR_PETRIFICATEUR_FIRING "▀█  █▀" COLOR_PETRIFICATEUR_BASE "▀▀▄ ",
-                                                    " ▀▄  █▀▀█  ▄▀ ",
-                                                    "   ▀▀    ▀▀   "};
-static const char *spriteBanque[7] = {COLOR_BANQUE_BASE "    ▄▄▄▄▄▄    ",
-                                             " ▄███▄▄▄▄███▄ ",
-                                             " ███" COLOR_BANQUE_GENERATION "$" COLOR_BANQUE_MONEY "$" COLOR_BANQUE_GENERATION "$" COLOR_BANQUE_MONEY "$" COLOR_BANQUE_BASE "██▄▄█ ",
-                                             " ███" COLOR_BANQUE_MONEY "$" COLOR_BANQUE_GENERATION "$" COLOR_BANQUE_MONEY "$" COLOR_BANQUE_GENERATION "$" COLOR_BANQUE_BASE "██▄▄█ ",
-                                             " ██▀▀▀▀▀██▀▀█ ",
-                                             " ████████████ ",
-                                             "              "};
 static const char *spriteSpeed[5][7] = {{SPEED_CONTROL COLOR_TOWER_SLOT_BG "         ▄█   ",
                                                 "       ▄███   ",
                                                 "     ▄█████   ",
@@ -125,7 +77,7 @@ enum BlockType
 typedef struct TutoBlock
 {
     enum BlockType type;
-    const char **sprite; // sprite de tourelle (7 lignes de 14 colonnes) ou NULL
+    const char **sprite; // inutilisé (les tourelles sont dessinées en pixel art à partir de `turret`)
     const char *heading_color;
     const char *heading;
     const char *text;
@@ -166,19 +118,19 @@ static const TutoBlock chapter_welcome[] = {
 };
 
 static const TutoBlock chapter_turrets[] = {
-    {BLOCK_TEXT, spriteSniper, COLOR_SNIPER_BASE, "Sniper",
+    {BLOCK_TEXT, NULL, COLOR_SNIPER_BASE, "Sniper",
      "Tir précis sur une seule cible. Au niveau 3, sa portée couvre toute la carte.", Sniper, NONE},
-    {BLOCK_TEXT, spriteInferno, COLOR_INFERNO_BASE, "Inferno",
+    {BLOCK_TEXT, NULL, COLOR_INFERNO_BASE, "Inferno",
      "Enflamme plusieurs ennemis autour de lui. Les flammes continuent de brûler après le tir.", Inferno, NONE},
-    {BLOCK_TEXT, spriteMortier, "\033[38;5;250m", "Mortier",
+    {BLOCK_TEXT, NULL, "\033[38;5;250m", "Mortier",
      "Obus explosifs qui touchent toute une zone, mais il ne peut pas viser les ennemis trop proches.", Mortier, NONE},
-    {BLOCK_TEXT, spriteGatling, "\033[38;5;245m", "Gatling",
+    {BLOCK_TEXT, NULL, "\033[38;5;245m", "Gatling",
      "Énorme cadence de tir, petits dégâts, courte portée. Idéale dans un virage.", Gatling, NONE},
-    {BLOCK_TEXT, spriteFreezer, COLOR_FREEZER_BASE, "Freezer",
+    {BLOCK_TEXT, NULL, COLOR_FREEZER_BASE, "Freezer",
      "Ralentit tous les ennemis à portée.", Freezer, NONE},
-    {BLOCK_TEXT, spritePetrificateur, COLOR_PETRIFICATEUR_FIRING, "Pétrificateur",
+    {BLOCK_TEXT, NULL, COLOR_PETRIFICATEUR_FIRING, "Pétrificateur",
      "Fige un ennemi sur place. Sans effet sur le Tank.", Petrificateur, NONE},
-    {BLOCK_TEXT, spriteBanque, COLOR_BANQUE_MONEY, "Banque",
+    {BLOCK_TEXT, NULL, COLOR_BANQUE_MONEY, "Banque",
      "Ne tire pas : elle rapporte de l'argent à intervalle régulier. À placer tôt !", Banque, NONE},
 };
 
@@ -442,7 +394,8 @@ static void layout(int term_width, int term_height)
 
             // Bloc texte : sprite à gauche (si présent), titre puis paragraphe à droite
             const char *text = block_text(c, b);
-            int text_x = content_left + (block->sprite ? SPRITE_WIDTH + 4 : 0);
+            bool has_preview = block->turret >= 0; // aperçu de la tourelle à gauche du texte
+            int text_x = content_left + (has_preview ? SPRITE_WIDTH + 4 : 0);
             int text_w = content_width - (text_x - content_left);
             int starts[MAX_LINES], lens[MAX_LINES];
             int n = ui_text_split(text_w, text, starts, lens, MAX_LINES);
@@ -451,7 +404,7 @@ static void layout(int term_width, int term_height)
             // Si le bloc entier ne tient pas dans la fin de la page mais tient sur une page vide,
             // on le met sur la page suivante (évite les lignes isolées). Sinon on le coupe.
             int block_h = heading_h + n * line_h;
-            if (block->sprite && block_h < SPRITE_ROWS)
+            if (has_preview && block_h < SPRITE_ROWS)
                 block_h = SPRITE_ROWS;
             bool page_has_content = y > page_top + title_h || (y > page_top && item_counts[page] > 1);
             if (y + block_h > content_bottom && block_h <= content_bottom - page_top && page_has_content)
@@ -461,8 +414,8 @@ static void layout(int term_width, int term_height)
             }
 
             int block_top = y;
-            if (block->sprite)
-                add_item(page, (PageItem){ITEM_SPRITE, content_left, y, block->sprite, NULL, NULL, 0});
+            if (has_preview)
+                add_item(page, (PageItem){ITEM_SPRITE, content_left, y, NULL, NULL, NULL, block->turret});
             if (block->heading)
             {
                 add_item(page, (PageItem){ITEM_HEADING, text_x, y, NULL, block->heading_color, block->heading, 0});
@@ -486,7 +439,7 @@ static void layout(int term_width, int term_height)
                 }
                 y += line_h;
             }
-            if (block->sprite && y < block_top + SPRITE_ROWS)
+            if (has_preview && y < block_top + SPRITE_ROWS)
                 y = block_top + SPRITE_ROWS;
             y += gap;
         }
@@ -559,7 +512,7 @@ static void draw_page(int page, int term_width)
                 break;
             }
             case ITEM_SPRITE:
-                draw_sprite(it->x, it->y, it->sprite, SPRITE_ROWS);
+                draw_turret_preview(it->x, it->y, it->len, 0, TRANSPARENT); // rendu pixel art (voir pixelart.c)
                 break;
             case ITEM_HEADING:
             {

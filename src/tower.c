@@ -1,5 +1,7 @@
 #include "tower.h"
 #include "save.h"
+#include "pixelart.h"
+#include "effects.h"
 #include <string.h>
 
 // Tous les bouts de programmes avec des # comme #if,#else... sont des morceaux de programmes utilisés uniquement sous l'activation du parametre BULLETS_ON dans ./src/tower.h
@@ -32,19 +34,11 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                 }
                 if (grid.cells[x][y].turret.type == Mortier)
                 {
-                    if (grid.cells[x][y].turret.compteur_mortier <= 0 && grid.cells[x][y].turret.compteur_mortier != -1)
-                    {
-                        int w;
-                        int h;
-                        get_terminal_size(&w, &h);
-                        fillBG(1, 1, w + 1, h + 1);
-                        drawFullGrid(grid);
-                        grid.cells[x][y].turret.compteur_mortier = -1;
-                    }
-                    else if (grid.cells[x][y].turret.compteur_mortier > 0)
-                    {
+                    // compteur_mortier : temps pendant lequel la gueule du mortier reste incandescente après un tir
+                    if (grid.cells[x][y].turret.compteur_mortier > 0)
                         grid.cells[x][y].turret.compteur_mortier -= dt;
-                    }
+                    else
+                        grid.cells[x][y].turret.compteur_mortier = -1;
                 }
                 if (!grid.cells[x][y].turret.has_malus)
                 {
@@ -57,6 +51,7 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                             if (grid.cells[x][y].turret.effet == Money) // Génération d'argent (Banque)
                             {
                                 gs->cash += grid.cells[x][y].turret.puissance_effet[lvl];
+                                fx_coins(x, y, (int)grid.cells[x][y].turret.puissance_effet[lvl]);
                                 enemies_hit++;
                             }
                             else if (grid.cells[x][y].turret.effet == Stun) // Stun = Pétrification (Pétrificateur)
@@ -84,6 +79,7 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                             ep.enemies[i].has_effect = true;
                                             ep.enemies[i].effet = Stun;
                                             ep.enemies[i].temps_rest = grid.cells[x][y].turret.puissance_effet[lvl];
+                                            fx_stun_beam(x, y, &ep.enemies[i]);
                                             enemies_hit++;
                                             break;
                                         }
@@ -120,6 +116,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                         }
                                     }
                                 }
+                                if (enemies_hit > 0)
+                                    fx_frost_wave(x, y, grid.cells[x][y].turret.range_max[lvl]);
                             }
                             else if (grid.cells[x][y].turret.effet == Fire) // Fire = dégats sur la durée (Inferno)
                             {
@@ -152,6 +150,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                         }
                                     }
                                 }
+                                if (enemies_hit > 0)
+                                    fx_flame_ring(x, y, grid.cells[x][y].turret.range_max[lvl]);
                             }
                         }
                         else
@@ -199,13 +199,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                                 }
                                             }
                                             ep.enemies[i].hp -= grid.cells[x][y].turret.damage[lvl] * rapport_speed_damage;
-                                            int w;
-                                            int h;
-                                            get_terminal_size(&w, &h);
-                                            scr_printf(COLOR_MORTIER_FIRING);
-                                            drawRange(w, h, d_min, ep.enemies[i].grid_x, ep.enemies[i].grid_y, false);
+                                            fx_mortar_explosion(&ep.enemies[i], d_min); // voir effects.c
                                             grid.cells[x][y].turret.compteur_mortier = 0.5;
-                                            scr_printf(RESET);
                                         }
                                         else // Tir standard
                                         {
@@ -219,6 +214,10 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
 #else
                                             // Changements des points de vie de l'ennemi touché, perdant ainsi le nombre de dégats infligés par l'attaque
                                             ep.enemies[i].hp -= grid.cells[x][y].turret.damage[lvl] * rapport_speed_damage;
+                                            if (grid.cells[x][y].turret.type == Sniper)
+                                                fx_sniper_shot(x, y, &ep.enemies[i]);
+                                            else
+                                                fx_gatling_shot(x, y, &ep.enemies[i]);
 #endif
                                         }
                                         // Fonctionnement du nombre d'ennemi pouvant être touché
@@ -654,13 +653,18 @@ Toutes les fenêtres (boutique, amélioration, sauvegardes, fin de partie) ont l
 pour que l'interface ne "saute" pas d'un menu à l'autre ou quand on change de sélection.
 La taille est calculée pour le contenu le plus grand : la boutique avec la plus longue description.
 */
+// Aperçu de la tourelle à droite de la description : agrandi 2 fois en grande police
+#define PREVIEW_SCALE (big_text_mode ? 2 : 1)
+#define PREVIEW_SPACE (14 * PREVIEW_SCALE + 4) // largeur de l'aperçu + marge
+
 void menuGeometry(int *x0, int *y0, int *w, int *h)
 {
     int line_h = ui_text_rows() + 1;
     *w = big_text_mode ? 150 : 64;
     int max_desc = 0;
     for (int i = 1; i <= SHOP_SIZE; i++)
-        max_desc = MAX(max_desc, ui_text_wrapped_rows(*w - 8, 1, turretDescription(shopTurretAt(i))));
+        max_desc = MAX(max_desc, ui_text_wrapped_rows(*w - 8 - PREVIEW_SPACE, 1, turretDescription(shopTurretAt(i))));
+    max_desc = MAX(max_desc, 7 * PREVIEW_SCALE); // hauteur de l'aperçu de la tourelle
     *h = line_h * (SHOP_SIZE + 2) + max_desc + 11;
     *x0 = width_center() - *w / 2;
     *y0 = height_center() - *h / 2;
@@ -748,7 +752,8 @@ void showTowerSelection(int ligne, bool hasTurret, struct Turret selectedTurret,
         menuLine(left, right, y, ligne == 2, "Vendre", value);
         y += line_h + 1;
         scr_printf(RESET);
-        ui_text_wrapped(left, y, right - left, 1, turretDescription(selectedTurret.type));
+        ui_text_wrapped(left, y, right - left - PREVIEW_SPACE, 1, turretDescription(selectedTurret.type));
+        draw_turret_preview_scaled(right + 1 - 14 * PREVIEW_SCALE, y, selectedTurret.type, selectedTurret.lvl, TRANSPARENT, PREVIEW_SCALE);
         menuFooter(left, y0, h, COLOR_GRAY "Entrée : valider", COLOR_GRAY "Espace : fermer");
     }
     else
@@ -768,7 +773,8 @@ void showTowerSelection(int ligne, bool hasTurret, struct Turret selectedTurret,
         }
         y += 1;
         scr_printf(RESET);
-        ui_text_wrapped(left, y, right - left, 1, turretDescription(shopTurretAt(ligne)));
+        ui_text_wrapped(left, y, right - left - PREVIEW_SPACE, 1, turretDescription(shopTurretAt(ligne)));
+        draw_turret_preview_scaled(right + 1 - 14 * PREVIEW_SCALE, y, shopTurretAt(ligne), 0, TRANSPARENT, PREVIEW_SCALE);
         menuFooter(left, y0, h, COLOR_GRAY "Entrée : acheter", COLOR_GRAY "Espace : fermer");
     }
 }

@@ -5,6 +5,8 @@
 #include "tower.h"
 #include "save.h"
 #include "tutorial.h"
+#include "pixelart.h"
+#include "effects.h"
 
 #include <string.h>
 #include <sys/select.h>
@@ -710,7 +712,7 @@ int main(int argc, char *argv[])
 
     // entiers qui gèrent la vitesse du jeu
     int game_speed_control = 1;
-    int compteur_animation_game_speed = 10;
+    float speed_icon_timer = 0; // durée d'affichage restante de l'icône de vitesse (en haut à droite)
 
     // Le jeu tourne tant que la vie n'atteint pas 0
     while (gameStats.health > 0)
@@ -724,6 +726,7 @@ int main(int argc, char *argv[])
 
         if (real_dt > 0)
             fps = fps * 0.9f + 0.1f * (1.0f / real_dt); // moyenne glissante pour un affichage stable
+        anim_clock += real_dt; // horloge des animations (flammes, canons, ennemis...)
 
         // Si le jeu a été bloqué un moment (ex: terminal en arrière-plan), on évite un énorme saut dans le temps
         if (real_dt > MAX_REAL_DT)
@@ -752,16 +755,11 @@ int main(int argc, char *argv[])
 
         if (!selection_active && !save_screen && !pause_menu) // un menu est ouvert : le jeu est en pause
         {
-            // On efface les zones où se trouvaient les ennemis à l'image précédente (et on redessine les tourelles)
-#if BULLETS_ON
-            if (frame_index % 50 == 0) // Avec les missiles, on efface tout l'écran régulièrement pour supprimer leurs traces
-            {
-                fillBG(1, 1, width + 1, height + 1);
-                drawFullGrid(grid);
-            }
-            else
-#endif
-                clearUsedPath(grid, enemyPool);
+            // Le plateau entier (fond, marges, espaces entre les cases, puis toutes les cases) est redessiné
+            // à chaque image : aucune trace ne peut rester derrière les ennemis.
+            // C'est peu coûteux : le moteur d'affichage n'envoie au terminal que ce qui a changé.
+            fillBG(1, GRID_TOP - 1, width + 1, height + 1);
+            drawFullGrid(grid);
 
             // Simulation du jeu, en plusieurs petits pas si la vitesse est élevée
             bool wave_ended = false;
@@ -781,6 +779,7 @@ int main(int argc, char *argv[])
                     wave_ended = true;
                 // Déplacement des ennemis
                 updateEnemies(&enemyPool, grid, &gameStats, &labels, delta_t);
+                fx_update(delta_t); // effets de tir (voir effects.c)
             }
 #if BULLETS_ON
             drawBullets(bulletPool);
@@ -792,8 +791,9 @@ int main(int argc, char *argv[])
                 drawFullGrid(grid);
             }
             drawLabels(labels);
-            // Affichage des ennemis
+            // Affichage des ennemis, puis des effets de tir par-dessus
             drawEnemies(enemyPool, grid);
+            fx_draw();
 
             // Affichage de la portée des tourelles
             if ((was_range_visible)                    //
@@ -810,10 +810,13 @@ int main(int argc, char *argv[])
             {
                 float range_min = grid.cells[selected_cell_x][selected_cell_y].turret.range_min[grid.cells[selected_cell_x][selected_cell_y].turret.lvl];
                 float range_max = grid.cells[selected_cell_x][selected_cell_y].turret.range_max[grid.cells[selected_cell_x][selected_cell_y].turret.lvl];
-                if (range_min > 0)
-                    drawRange(width, height, range_min, selected_cell_x + 0.5, selected_cell_y + 0.5, false);
-                if (range_max > 0)
-                    drawRange(width, height, range_max, selected_cell_x + 0.5, selected_cell_y + 0.5, false);
+                // Cercle(s) de portée en pointillés animés ; pas de cercle pour la Banque (elle ne tire pas)
+                if (grid.cells[selected_cell_x][selected_cell_y].turret.type != Banque)
+                {
+                    draw_range_ring(selected_cell_x, selected_cell_y, range_max, 252);
+                    if (range_min > 0)
+                        draw_range_ring(selected_cell_x, selected_cell_y, range_min, 167); // portée minimale (Mortier) en rouge
+                }
 
                 was_range_visible = true;
                 prev_selected_x = selected_cell_x;
@@ -823,10 +826,14 @@ int main(int argc, char *argv[])
 
         // Icône en haut à droite : pause tant que la boutique est ouverte, sinon la vitesse actuelle.
         // (avant, l'état "pause" restait bloqué si on fermait la boutique en achetant une tourelle)
-        if (compteur_animation_game_speed < delta_t || selection_active || pause_menu)
+        // Icône en haut à droite : pause pendant les menus, sinon la vitesse pendant 1,5 s après un changement
+        // (elle recouvre une case du plateau, donc elle ne reste pas affichée en permanence ; la vitesse est aussi dans le bandeau)
+        if (selection_active || pause_menu)
+            drawGameSpeed(game_speed_control, width, true);
+        else if (speed_icon_timer > 0)
         {
-            drawGameSpeed(game_speed_control, width, selection_active || pause_menu);
-            compteur_animation_game_speed += 10;
+            drawGameSpeed(game_speed_control, width, false);
+            speed_icon_timer -= real_dt;
         }
 
         /*
@@ -868,7 +875,7 @@ int main(int argc, char *argv[])
             }
             else if (c == 'o' || c == 'O')
             {
-                compteur_animation_game_speed = 0;
+                speed_icon_timer = 1.5f;
                 if (game_speed_control > 8)
                 {
                     game_speed_control = 16;
@@ -880,7 +887,7 @@ int main(int argc, char *argv[])
             }
             else if (c == 'l' || c == 'L')
             {
-                compteur_animation_game_speed = 0;
+                speed_icon_timer = 1.5f;
                 if (game_speed_control < 2)
                 {
                     game_speed_control = 1;
@@ -941,6 +948,7 @@ int main(int argc, char *argv[])
                         selected_cell_y = 0;
                         prev_selected_x = prev_selected_y = 0;
                         grid.cells[0][0].selected = true;
+                        fx_clear();
                         fillBG(1, 1, width + 1, height + 1);
                         drawFullGrid(grid);
                         save_screen = false;

@@ -499,6 +499,20 @@ Pour l'afficage de la grille, plusieurs systèmes entrent en jeu:
 La fonction drawEnemies parcours les enemis et les afiches un a un avec leurs animations.
 
 
+#### Pixel art
+Les tourelles, les emplacements et les ennemis sont dessinés en pixel art (`src/pixelart.c`).
+Chaque caractère du terminal sert de **deux pixels superposés** : `▀` affiche sa couleur de texte en haut et sa couleur de fond en bas. Une case de 18x9 caractères devient ainsi une toile de 18x18 pixels (presque carrés) en 256 couleurs.
+
+- Les tourelles sont dessinées par programme (cercles, lignes, dégradés) : le canon du Sniper et de la Gatling suit l'ennemi visé de façon continue, les flammes de l'Inferno, le flocon du Freezer ou les pierres du Pétrificateur sont animés, et des points dorés indiquent le niveau.
+- Les ennemis sont des sprites (une lettre = une couleur) avec 2 images de marche ; ils se retournent selon leur direction, ont une barre de vie d'un pixel de haut, et changent d'aspect selon l'effet subi (gris pierre si pétrifiés, givre si ralentis, flammes s'ils brûlent).
+- Les animations utilisent `anim_clock` (temps réel) : elles ont la même vitesse sur tous les ordinateurs.
+- Le chemin est un "bus de données" : sol texturé, bordures fines, et une piste centrale sur laquelle des impulsions lumineuses circulent du départ vers la sortie (les cases du chemin sont numérotées dans l'ordre de parcours par `numberPath`).
+- Le cercle de portée de la tourelle sélectionnée est dessiné au pixel près, en pointillés qui tournent (en rouge : la portée minimale du Mortier). La Banque n'en a pas.
+
+#### Effets de tir
+`src/effects.c` gère de courtes animations déclenchées par les tirs : éclair et impact du Sniper, traçantes de la Gatling, explosion du Mortier (onde de choc, boule de feu, débris puis fumée), anneau de flammes de l'Inferno, onde de givre du Freezer, rayon du Pétrificateur et pièces de la Banque.
+Ils sont dessinés par-dessus le plateau au pixel près : le moteur d'affichage relit le caractère déjà présent (`scr_peek`) pour ne remplacer que la moitié haute ou basse.
+
 #### Le problème des missiles
 Un des plus gros probèmes auquels nous avons été confrontès avec le términal est la latence.
 En effet, les écritures sont très lentes et il n'est donc pass possible de réafficher 'intégralité des caractères du terminal a chaque frame (~60x par seconde). Le clignotement rendrait le jeu injuable.

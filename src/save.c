@@ -137,6 +137,7 @@ bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSy
         free(grid->cells[x]);
     free(grid->cells);
     *grid = loaded;
+    numberPath(grid); // ordre de parcours du chemin (animation des impulsions)
 
     *gameStats = data.gameStats;
     switchToWave(waveSystem, data.waveIndex);
