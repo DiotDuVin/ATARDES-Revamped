@@ -16,6 +16,7 @@
 #include <malloc.h>
 
 #include "render.h"
+#include "bigtext.h"
 
 /*
 #############
@@ -48,6 +49,13 @@ CONFIGURATION
 #define CELL_HEIGHT 9
 
 #define GAP 2
+
+// Ligne du terminal où commence la grille. Les lignes au-dessus servent à l'affichage
+// des infos (vague, vie, argent). Elle dépend de la taille du texte (voir main.c).
+extern int grid_top;
+#define GRID_TOP grid_top
+// Hauteur réservée en haut de l'écran pour les infos en grande police
+#define HUD_ROWS_BIG 4
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -289,6 +297,8 @@ void hide_cursor();
 void show_cursor();
 void printCritical(char *errorMessage);
 void get_terminal_size(int *width, int *height);
+int width_center();
+int height_center();
 void checkTerminalSize(int *width, int *height);
 void drawRange(int term_width, int term_height, float range, float grid_x, float grid_y, bool fill);
 void anim_debut(int term_width, int term_height);

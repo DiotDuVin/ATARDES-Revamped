@@ -224,7 +224,7 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
             {
 
                 int terminal_x = cell.x * (CELL_WIDTH + GAP) + 3;
-                int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + 2;
+                int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP;
 
                 scr_printf(COLOR_TOWER_SLOT_BG);
                 move_to(terminal_x, terminal_y + y);
@@ -241,7 +241,7 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
         if (cell.selected) // La cellule selectionnée est dessinée avec un cadre autour
         {
             int terminal_x = cell.x * (CELL_WIDTH + GAP) + 3;
-            int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + 2;
+            int terminal_y = cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP;
             scr_printf(COLOR_SELECTED_SLOT);
             scr_printf(COLOR_TOWER_SLOT_BG);
             for (int y = 0; y < CELL_HEIGHT; y++)
@@ -280,7 +280,7 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
         if (cell.hasTurret) // Si la cellule est une tourelle, elle va être déssinée selon son sprite, donc ci dessous la liste des sprites
         {
             int x_current_turret = cell.x * (CELL_WIDTH + GAP) + 3 + 2;
-            int y_current_turret = cell.y * (CELL_HEIGHT + GAP / 2) + 2 + 1;
+            int y_current_turret = cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP + 1;
             scr_printf(COLOR_TOWER_SLOT_BG);
             if (cell.turret.type == Sniper) // Sniper, 8 sprites pour les 8 directions
             {
@@ -1340,7 +1340,7 @@ void drawCell(struct Cell cell, Grid grid) // Dessine les cellules selon leur st
         for (int y = 0; y < CELL_HEIGHT + 2; y++)
         {
             int terminal_x = (cell.x * (CELL_WIDTH + GAP) + 3);
-            int terminal_y = (cell.y * (CELL_HEIGHT + GAP / 2) + 2);
+            int terminal_y = (cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP);
 
             move_to(terminal_x - 1, terminal_y + y - 1);
 

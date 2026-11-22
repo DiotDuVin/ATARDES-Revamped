@@ -91,29 +91,44 @@ gcc -o atrds.out -std=c99 main.c grid.c shared.c enemies.c tower.c -lm
 
 ### Lancer le jeu
 
+Le plus simple :
 ```bash
-./atrds.out
+./jouer.sh
+```
+Ce script compile le jeu si besoin, puis ouvre une nouvelle fenêtre de terminal **en plein écran** avec une taille de police calculée pour que le jeu tienne à l'écran (plus besoin de dézoomer à la main). Il reconnaît kitty, alacritty, wezterm, konsole, gnome-terminal, mate-terminal, xfce4-terminal et xterm.
+
+Si le terminal actuel est déjà assez grand (232x74 caractères), le jeu se lance directement dedans.
+
+Réglages possibles :
+```bash
+ATARDES_FONT_SIZE=6 ./jouer.sh        # forcer une taille de police (en points)
+ATARDES_TERMINAL=xterm ./jouer.sh     # forcer un terminal
+./jouer.sh --dry-run                  # afficher la commande sans la lancer
 ```
 
-Si sur la version git les scripts `run.sh` et `build.sh` sont disponibles.
+`./atrds.out` et `./run.sh` font la même chose automatiquement : si le terminal n'a pas la bonne taille et qu'une interface graphique est disponible, le jeu ouvre lui-même la fenêtre adaptée. Si la taille obtenue n'est toujours pas bonne, il mesure l'écart et rouvre la fenêtre avec une police corrigée (2 essais au maximum).
 
-`run.sh` recompile automatiquement le jeu a chaque execution.
+Sans interface graphique (console texte, SSH), le jeu demande d'agrandir le terminal ou de dézoomer avec `Ctrl -` (au moins 232x74 caractères).
+
+`run.sh` recompile automatiquement le jeu à chaque exécution.
 
 #### Paramètres de démarrage
 
-| paramètre  | description                                    |
-| ---------- | ---------------------------------------------- |
-| --play     | lance le jeu directement                       |
-| --sim-wave | Bonus: voir [l’annexe simulation](#simulation) |
+| paramètre      | description                                                    |
+| -------------- | -------------------------------------------------------------- |
+| --play         | lance le jeu directement (sans intro ni menu)                  |
+| --petit-texte  | texte de taille normale au lieu de la grande police            |
+| --debug        | affiche les infos techniques (fps, nombre d'ennemis...)        |
+| --sim-wave [n] | Bonus: voir [l’annexe simulation](#simulation)                 |
+| --help         | liste des paramètres                                           |
 
-Si aucun paramètre n'est défini, le jeu se lancera sur le menu standard.
+Par défaut, les menus, le tutoriel et les infos de partie utilisent une **grande police** (lettres dessinées avec des blocs, 3 lignes de haut) pour rester lisibles malgré la petite taille de police du terminal.
 
 Exemple:
 ```bash
+./jouer.sh --play
+# ou, dans un terminal déjà assez grand
 ./run.sh --play
-# qui équivaut à
-./build.sh
-./atrds.out --play 
 ```
 
 #### Comment jouer
@@ -124,7 +139,8 @@ Vous êtes ensuite lancées dans le jeu avec 20HP et 30€:
 - déplacez le curseur sur une case avec les flèches du clavier puis pressez la touche `espace` pour ouvrir le magasin
 - Sélectionnez la tourelle de votre choix avec les fleches `haut`/`bas` puis `entrer` pour valider
 - Vous pouvez re-sélectionner une tourelle pour l'améliorer ou la vendre.
-- Pour quitter le jeu: touche `q`
+- `Échap` ouvre le menu pause : reprendre, tutoriel, sauvegardes, liste des commandes, quitter
+- Pour quitter le jeu: touche `q` (la partie est sauvée dans l'emplacement 0)
 - Vous découvrirez les ennemis et leurs particularités en jouant :wink:  
 
 ## Documentation

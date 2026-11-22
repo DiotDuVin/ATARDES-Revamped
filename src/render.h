@@ -56,6 +56,10 @@ void scr_present(void);
 // scr_present() si le moteur est actif, sinon fflush(stdout).
 void scr_flush(void);
 
+// Mémorise / restaure les couleurs courantes de scr_printf (utile pour dessiner sur plusieurs lignes)
+unsigned long scr_attr_save(void);
+void scr_attr_restore(unsigned long saved);
+
 // Force le prochain scr_present() à redessiner tout l'écran
 // (utile si le terminal a été modifié par un autre moyen).
 void scr_invalidate(void);

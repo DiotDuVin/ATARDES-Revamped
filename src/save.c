@@ -42,6 +42,8 @@ bool saveProgress(Grid grid, GameStats gameStats, int waveIndex, int slot)
     // Données générales (le pointeur vers les cases n'a pas de sens dans un fichier)
     struct SerializedGameData data;
     memset(&data, 0, sizeof(data));
+    data.magic = SAVE_MAGIC;
+    data.version = SAVE_VERSION;
     data.grid = grid;
     data.grid.cells = NULL;
     data.gameStats = gameStats;
@@ -59,6 +61,20 @@ bool saveProgress(Grid grid, GameStats gameStats, int waveIndex, int slot)
     return ok;
 }
 
+// Vérifie qu'une case chargée depuis un fichier est cohérente (fichier abîmé ou d'une autre version)
+static bool cellIsValid(const struct Cell *cell, int x, int y)
+{
+    if (cell->x != x || cell->y != y || (cell->type != CHEMIN && cell->type != TERRAIN))
+        return false;
+    if (!cell->hasTurret)
+        return true;
+    const struct Turret *t = &cell->turret;
+    if (cell->type != TERRAIN || t->type < Sniper || t->type > Gatling || t->lvl < 0 || t->lvl > 2)
+        return false;
+    // Statistiques du niveau actuel (le "!" refuse aussi les valeurs NaN)
+    return t->reload_delay[t->lvl] > 0 && t->range_max[t->lvl] >= 0 && t->nb_ennemi[t->lvl] >= 0;
+}
+
 bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSystem, EnemyPool *enemyPool, Labels *labels)
 {
     if (slot < 0 || slot >= SAVE_SLOTS)
@@ -72,6 +88,9 @@ bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSy
 
     struct SerializedGameData data;
     if (fread(&data, sizeof(data), 1, file) != 1                         //
+        || data.magic != SAVE_MAGIC || data.version != SAVE_VERSION      //
+        || data.waveIndex < 0 || data.waveIndex > 100000                 //
+        || data.gameStats.health <= 0                                    //
         || data.grid.width <= 0 || data.grid.height <= 0                 //
         || data.grid.width > grid->width || data.grid.height > grid->height) // la grille doit tenir dans le terminal actuel
     {
@@ -87,6 +106,20 @@ bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSy
         ok = fread(loaded.cells[x], sizeof(struct Cell), loaded.height, file) == (size_t)loaded.height;
     fclose(file);
 
+    if (!ok)
+    {
+        for (int x = 0; x < loaded.width; x++)
+            free(loaded.cells[x]);
+        free(loaded.cells);
+        return false;
+    }
+
+    // Contenu des cases et position du chemin
+    for (int x = 0; ok && x < loaded.width; x++)
+        for (int y = 0; ok && y < loaded.height; y++)
+            ok = cellIsValid(&loaded.cells[x][y], x, y);
+    ok = ok && loaded.start_x == 0 && loaded.start_y >= 0 && loaded.start_y < loaded.height //
+         && loaded.cells[loaded.start_x][loaded.start_y].type == CHEMIN;
     if (!ok)
     {
         for (int x = 0; x < loaded.width; x++)

@@ -533,6 +533,19 @@ void scr_invalidate(void)
     }
 }
 
+unsigned long scr_attr_save(void)
+{
+    // fg et bg (de -1 à 255) sont décalés de 1 pour être positifs, puis rangés dans un seul entier
+    return ((unsigned long)(screen.attr.fg + 1) << 16) | ((unsigned long)(screen.attr.bg + 1) << 4) | screen.attr.flags;
+}
+
+void scr_attr_restore(unsigned long saved)
+{
+    screen.attr.fg = (short)((saved >> 16) & 0x1FF) - 1;
+    screen.attr.bg = (short)((saved >> 4) & 0x1FF) - 1;
+    screen.attr.flags = saved & 0xF;
+}
+
 void scr_puts(const char *str)
 {
     if (!screen.active)

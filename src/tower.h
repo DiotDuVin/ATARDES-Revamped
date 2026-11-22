@@ -23,7 +23,28 @@ typedef struct BulletPool
 
 #endif
 
-void showTowerSelection(int ligne, bool hasTurret, struct Turret selected_tower);
+#define SHOP_SIZE 7 // nombre de tourelles dans la boutique
+
+void showTowerSelection(int ligne, bool hasTurret, struct Turret selected_tower, int cash);
+// Tourelle affichée à la ligne `ligne` (1 à SHOP_SIZE) de la boutique
+enum TurretType shopTurretAt(int ligne);
+const char *turretName(enum TurretType type);
+void drawPanel(int x0, int y0, int w, int h, const char *border_color);
+// Menu pause (Échap) : Reprendre, Tutoriel, Sauvegardes, Commandes, Quitter
+#define PAUSE_ITEMS 5
+enum PauseChoice
+{
+    PAUSE_RESUME = 1,
+    PAUSE_TUTORIAL,
+    PAUSE_SAVES,
+    PAUSE_CONTROLS,
+    PAUSE_QUIT,
+};
+void showPauseMenu(int ligne);
+// Liste des touches du jeu (consultation seulement)
+void showControls(void);
+// Position et taille communes à toutes les fenêtres du jeu
+void menuGeometry(int *x0, int *y0, int *w, int *h);
 void showSaveScreen(int ligne);
 struct Turret getTurretStruct(enum TurretType type);
 int getTurretPrice(enum TurretType type, int level);

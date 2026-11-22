@@ -1,5 +1,6 @@
 #include "tower.h"
 #include "save.h"
+#include <string.h>
 
 // Tous les bouts de programmes avec des # comme #if,#else... sont des morceaux de programmes utilisés uniquement sous l'activation du parametre BULLETS_ON dans ./src/tower.h
 
@@ -282,7 +283,7 @@ void drawBullets(BulletPool bp)
     for (int i = 0; i < bp.count; i++)
     {
         int terminal_x = bp.bullets[i].grid_x * (CELL_WIDTH + GAP) + 3;
-        int terminal_y = bp.bullets[i].grid_y * (CELL_HEIGHT + GAP / 2) + 2;
+        int terminal_y = bp.bullets[i].grid_y * (CELL_HEIGHT + GAP / 2) + GRID_TOP;
         move_to(terminal_x, terminal_y);
 
         scr_printf("⌾");
@@ -407,6 +408,7 @@ int getTurretPrice(enum TurretType type, int level)
 struct Turret getTurretStruct(enum TurretType type)
 {
     struct Turret tur;
+    memset(&tur, 0, sizeof(tur)); // les niveaux non définis valent 0 (avant : valeurs aléatoires de la mémoire)
     tur.in_range = false;
     tur.has_malus = false;
     tur.compteur_mortier = -1;
@@ -554,153 +556,272 @@ struct Turret getTurretStruct(enum TurretType type)
     return tur;
 }
 
-void showSaveScreen(int ligne)
+/*
+####################
+## Fenêtres (menus) ##
+####################
+*/
+
+// Ordre des tourelles dans la boutique (ligne 1 à 7)
+static const enum TurretType SHOP_ORDER[SHOP_SIZE] = {Sniper, Inferno, Mortier, Gatling, Petrificateur, Freezer, Banque};
+
+enum TurretType shopTurretAt(int ligne)
 {
-    int terminal_width, terminal_height;
-    get_terminal_size(&terminal_width, &terminal_height);
+    return SHOP_ORDER[CLAMP(ligne, 1, SHOP_SIZE) - 1];
+}
 
-    int width = 80;  // terminal_width/2;
-    int height = 30; // terminal_height/2;
-    assert(width < terminal_width);
-    assert(height < terminal_height);
+const char *turretName(enum TurretType type)
+{
+    switch (type)
+    {
+    case Sniper: return "Sniper";
+    case Inferno: return "Inferno";
+    case Mortier: return "Mortier";
+    case Gatling: return "Gatling";
+    case Petrificateur: return "Pétrificateur";
+    case Freezer: return "Freezer";
+    case Banque: return "Banque";
+    }
+    return "?";
+}
 
-    int x0 = terminal_width / 2.0f - width / 2.0f;
-    int y0 = terminal_height / 2.0f - height / 2.0f + 1;
+static const char *turretColor(enum TurretType type)
+{
+    switch (type)
+    {
+    case Sniper: return COLOR_SNIPER_BASE;
+    case Inferno: return COLOR_INFERNO_BASE;
+    case Mortier: return "\033[38;5;250m";
+    case Gatling: return "\033[38;5;245m";
+    case Petrificateur: return COLOR_PETRIFICATEUR_FIRING;
+    case Freezer: return COLOR_FREEZER_BASE;
+    case Banque: return COLOR_BANQUE_MONEY;
+    }
+    return "";
+}
 
-    scr_printf(RESET);
-    scr_printf(COLOR_STANDARD_BG);
+static const char *turretDescription(enum TurretType type)
+{
+    switch (type)
+    {
+    case Sniper: return "Grande portée, gros dégâts, tir lent.";
+    case Inferno: return "Brûle jusqu'à 4 ennemis proches.";
+    case Mortier: return "Explosion de zone. Inutile de trop près.";
+    case Gatling: return "Tir très rapide, courte portée.";
+    case Petrificateur: return "Fige un ennemi sur place.";
+    case Freezer: return "Ralentit les ennemis autour de lui.";
+    case Banque: return "Rapporte de l'argent régulièrement.";
+    }
+    return "";
+}
 
-    // Bordures et coeur de la fenêtre
-    for (int y = 0; y < height; y++)
+// Dessine une fenêtre (cadre + fond noir) de w x h caractères
+void drawPanel(int x0, int y0, int w, int h, const char *border_color)
+{
+    for (int y = 0; y < h; y++)
     {
         move_to(x0, y0 + y);
-
-        for (int x = 0; x < width; x++)
+        scr_printf(RESET "%s", border_color);
+        for (int x = 0; x < w; x++)
         {
-            scr_printf(RESET);
-            if (y == ligne)
-                scr_printf("\033[38;5;221m");
-            if (x == 0 || x == width - 1)
+            if (x == 0 || x == w - 1)
                 scr_printf("█");
             else if (y == 0)
-
                 scr_printf("▀");
-            else if (y == height - 1)
+            else if (y == h - 1)
                 scr_printf("▄");
             else
                 scr_printf(" ");
         }
     }
-    move_to(x0 + 1, y0 + 1);
-    scr_printf("\"Enter\" pour load, \"Espace\" pour save, \"S\" pour fermer");
-    move_to(x0 + 1, y0 + 2);
-    scr_printf("Si vous quittez avec \"Q\", votre partie sera sauvegardé en 0");
-    for (int y = 3; y < 10; y++)
+    scr_printf(RESET);
+}
+
+// Une ligne de menu : flèche si sélectionnée, texte à gauche, valeur alignée à droite
+static void menuLine(int x_left, int x_right, int y, bool selected, const char *label, const char *value)
+{
+    scr_printf(RESET);
+    ui_text(x_left, y, selected ? COLOR_SELECTED_SLOT "▶" : " ");
+    int arrow = ui_text_width("▶") + (big_text_mode ? 3 : 1);
+    int value_x = x_right - ui_text_width(value);
+    ui_text_fit(x_left + arrow, y, value_x - (x_left + arrow) - 2, label);
+    ui_text(value_x, y, value);
+    scr_printf(RESET);
+}
+
+/*
+Toutes les fenêtres (boutique, amélioration, sauvegardes, fin de partie) ont la même taille,
+pour que l'interface ne "saute" pas d'un menu à l'autre ou quand on change de sélection.
+La taille est calculée pour le contenu le plus grand : la boutique avec la plus longue description.
+*/
+void menuGeometry(int *x0, int *y0, int *w, int *h)
+{
+    int line_h = ui_text_rows() + 1;
+    *w = big_text_mode ? 150 : 64;
+    int max_desc = 0;
+    for (int i = 1; i <= SHOP_SIZE; i++)
+        max_desc = MAX(max_desc, ui_text_wrapped_rows(*w - 8, 1, turretDescription(shopTurretAt(i))));
+    *h = line_h * (SHOP_SIZE + 2) + max_desc + 11;
+    *x0 = width_center() - *w / 2;
+    *y0 = height_center() - *h / 2;
+}
+
+// Position de la première des deux lignes d'aide, en bas de la fenêtre
+static int footerY(int y0, int h)
+{
+    return y0 + h - 2 - (ui_text_rows() + 1) - ui_text_rows();
+}
+
+// Ouvre une fenêtre standard avec son titre ; renvoie la ligne où commence le contenu
+static int openMenu(const char *title, const char *border_color, int *left, int *right, int *x0_out, int *y0_out, int *h_out)
+{
+    int x0, y0, w, h;
+    menuGeometry(&x0, &y0, &w, &h);
+    drawPanel(x0, y0, w, h, border_color);
+    *left = x0 + 4;
+    *right = x0 + w - 5;
+    if (x0_out)
+        *x0_out = x0;
+    if (y0_out)
+        *y0_out = y0;
+    if (h_out)
+        *h_out = h;
+    if (ui_text_width(title) <= w - 8)
+        ui_text_centered(x0 + w / 2, y0 + 2, title);
+    else
+        ui_text_fit(x0 + 4, y0 + 2, w - 8, title);
+    scr_printf(RESET);
+    return y0 + 2 + ui_text_rows() + 2;
+}
+
+static void menuFooter(int left, int y0, int h, const char *line1, const char *line2)
+{
+    int fy = footerY(y0, h);
+    scr_printf(RESET);
+    int x0, y0_, w, h_;
+    menuGeometry(&x0, &y0_, &w, &h_);
+    int max_w = w - 8;
+    ui_text_fit(left, fy, max_w, line1);
+    ui_text_fit(left, fy + ui_text_rows() + 1, max_w, line2);
+    scr_printf(RESET);
+}
+
+void showSaveScreen(int ligne)
+{
+    int line_h = ui_text_rows() + 1;
+    int left, right, y0, h;
+    int y = openMenu(COLOR_YELLOW "Sauvegardes", "\033[38;5;250m", &left, &right, NULL, &y0, &h);
+    for (int slot = 0; slot < SAVE_SLOTS; slot++)
     {
-        move_to(x0 + 1, y0 + y);
-        if (saveExists(y - 3))
-            scr_printf("save_%d " COLOR_GREEN "(sauvegarde)" RESET, y - 3);
+        char label[32];
+        snprintf(label, sizeof(label), slot == 0 ? "Emplacement 0 (auto)" : "Emplacement %d", slot);
+        menuLine(left, right, y, ligne - 3 == slot, label, saveExists(slot) ? COLOR_GREEN "sauvegardé" : COLOR_GRAY "vide");
+        y += line_h;
+    }
+    menuFooter(left, y0, h, COLOR_GRAY "Entrée : charger   Espace : sauver", COLOR_GRAY "Échap ou S : fermer");
+}
+
+void showTowerSelection(int ligne, bool hasTurret, struct Turret selectedTurret, int cash)
+{
+    int line_h = ui_text_rows() + 1;
+    int left, right, x0, y0, h;
+
+    if (hasTurret)
+    {
+        // Menu d'amélioration / vente
+        char title[64];
+        snprintf(title, sizeof(title), "%s%s  niv. %d", turretColor(selectedTurret.type), turretName(selectedTurret.type), selectedTurret.lvl + 1);
+        int y = openMenu(title, turretColor(selectedTurret.type), &left, &right, &x0, &y0, &h);
+
+        int next_price = getTurretPrice(selectedTurret.type, selectedTurret.lvl + 1);
+        char value[32];
+        if (next_price > 0)
+        {
+            snprintf(value, sizeof(value), "%s%d €", cash >= next_price ? COLOR_YELLOW : COLOR_GRAY, next_price);
+            menuLine(left, right, y, ligne == 1, cash >= next_price ? "Améliorer" : COLOR_GRAY "Améliorer", value);
+        }
         else
-            scr_printf("save_%d " COLOR_GRAY "(vide)" RESET, y - 3);
+            menuLine(left, right, y, ligne == 1, COLOR_GRAY "Améliorer", COLOR_GRAY "niveau max");
+        y += line_h;
+
+        snprintf(value, sizeof(value), COLOR_GREEN "+%d €", (int)(getTurretPrice(selectedTurret.type, selectedTurret.lvl) * 0.8));
+        menuLine(left, right, y, ligne == 2, "Vendre", value);
+        y += line_h + 1;
+        scr_printf(RESET);
+        ui_text_wrapped(left, y, right - left, 1, turretDescription(selectedTurret.type));
+        menuFooter(left, y0, h, COLOR_GRAY "Entrée : valider", COLOR_GRAY "Espace : fermer");
+    }
+    else
+    {
+        // Boutique
+        int y = openMenu(COLOR_YELLOW "Boutique", COLOR_YELLOW, &left, &right, &x0, &y0, &h);
+        for (int i = 1; i <= SHOP_SIZE; i++)
+        {
+            enum TurretType type = shopTurretAt(i);
+            int price = getTurretPrice(type, 0);
+            bool affordable = cash >= price;
+            char label[64], value[32];
+            snprintf(label, sizeof(label), "%s%s", affordable ? turretColor(type) : COLOR_GRAY, turretName(type));
+            snprintf(value, sizeof(value), "%s%d €", affordable ? COLOR_YELLOW : COLOR_GRAY, price);
+            menuLine(left, right, y, ligne == i, label, value);
+            y += line_h;
+        }
+        y += 1;
+        scr_printf(RESET);
+        ui_text_wrapped(left, y, right - left, 1, turretDescription(shopTurretAt(ligne)));
+        menuFooter(left, y0, h, COLOR_GRAY "Entrée : acheter", COLOR_GRAY "Espace : fermer");
     }
 }
 
-// Fonction qui pause le jeu et ouvre le panneau de séléction
-void showTowerSelection(int ligne, bool hasTurret, struct Turret selectedTurret)
+/*
+##############
+## Menu pause ##
+##############
+*/
+
+static const char *PAUSE_LABELS[PAUSE_ITEMS] = {"Reprendre", "Tutoriel", "Sauvegardes", "Commandes", "Quitter"};
+
+void showPauseMenu(int ligne)
 {
-    int terminal_width, terminal_height;
-    get_terminal_size(&terminal_width, &terminal_height);
-
-    int width = 80;  // terminal_width/2;
-    int height = 30; // terminal_height/2;
-    assert(width < terminal_width);
-    assert(height < terminal_height);
-
-    int x0 = terminal_width / 2.0f - width / 2.0f;
-    int y0 = terminal_height / 2.0f - height / 2.0f + 1;
-
-    scr_printf(RESET);
-    scr_printf(COLOR_STANDARD_BG);
-
-    // Bordures et coeur de la fenêtre
-    for (int y = 0; y < height; y++)
+    int line_h = ui_text_rows() + 1;
+    int left, right, y0, h;
+    int y = openMenu(COLOR_YELLOW "Pause", "\033[38;5;250m", &left, &right, NULL, &y0, &h);
+    y += line_h;
+    for (int i = 1; i <= PAUSE_ITEMS; i++)
     {
-        move_to(x0, y0 + y);
-
-        for (int x = 0; x < width; x++)
-        {
-            scr_printf(RESET);
-            if (y == ligne)
-                scr_printf("\033[38;5;221m");
-            if (x == 0 || x == width - 1)
-                scr_printf("█");
-            else if (y == 0)
-
-                scr_printf("▀");
-            else if (y == height - 1)
-                scr_printf("▄");
-            else
-                scr_printf(" ");
-        }
+        menuLine(left, right, y, ligne == i, PAUSE_LABELS[i - 1], i == PAUSE_ITEMS ? COLOR_GRAY "sauvé en 0" : "");
+        y += line_h + 1;
     }
+    menuFooter(left, y0, h, COLOR_GRAY "Entrée : valider", COLOR_GRAY "Échap : reprendre");
+}
 
-    // Test pour voir si une tourelle est présente, dans ce cas proposer l'amélioration ou la vente
-    if (hasTurret)
+void showControls(void)
+{
+    static const char *keys[][2] = {
+        {"Flèches", "sélection"},
+        {"Espace", "boutique"},
+        {"Entrée", "valider"},
+        {"O / L", "vitesse + / -"},
+        {"S", "sauvegardes"},
+        {"Échap", "pause"},
+        {"Q", "quitter (sauvé en 0)"},
+    };
+    int line_h = ui_text_rows() + 1;
+    int left, right, y0, h;
+    int y = openMenu(COLOR_YELLOW "Commandes", "\033[38;5;250m", &left, &right, NULL, &y0, &h);
+    int key_w = 0;
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
+        key_w = MAX(key_w, ui_text_width(keys[i][0]));
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
     {
-        int next_price = getTurretPrice(selectedTurret.type, selectedTurret.lvl + 1);
-
-        if (next_price != -1)
-        {
-            move_to(x0 + 1, y0 + 1);
-            scr_printf(" 🛠️ Upgrade");
-
-            move_to(x0 + 1 + width - 8, y0 + 1);
-            scr_printf(COLOR_YELLOW "-% 3d €" RESET, next_price);
-        }
-
-        move_to(x0 + 1, y0 + 2);
-        scr_printf(" 💰 Sell");
-
-        move_to(x0 + 1 + width - 8, y0 + 2);
-        scr_printf(COLOR_GREEN "+% 3d €" RESET, (int)(getTurretPrice(selectedTurret.type, selectedTurret.lvl) * 0.8));
+        char key[32];
+        snprintf(key, sizeof(key), COLOR_YELLOW "%s", keys[i][0]);
+        scr_printf(RESET);
+        ui_text(left, y, key);
+        scr_printf(RESET);
+        int desc_x = left + key_w + (big_text_mode ? 8 : 3);
+        ui_text_fit(desc_x, y, right - desc_x, keys[i][1]);
+        y += line_h;
     }
-    // Sinon, proposer la construction des autres tourelles
-    else
-    {
-        move_to(x0 + 1, y0 + 1);
-        scr_printf(" 🔫 Sniper");
-        move_to(x0 + 1 + width - 10, y0 + 1);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Sniper, 0));
-
-        move_to(x0 + 1, y0 + 2);
-        scr_printf(" 🔥 Inferno");
-        move_to(x0 + 1 + width - 10, y0 + 2);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Inferno, 0));
-
-        move_to(x0 + 1, y0 + 3);
-        scr_printf(" 🔬 Mortier ");
-        move_to(x0 + 1 + width - 10, y0 + 3);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Mortier, 0));
-
-        move_to(x0 + 1, y0 + 4);
-        scr_printf(" ⚙️  Gatling ");
-        move_to(x0 + 1 + width - 10, y0 + 4);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Gatling, 0));
-
-        move_to(x0 + 1, y0 + 5);
-        scr_printf(" ⏳ Petrificateur ");
-        move_to(x0 + 1 + width - 10, y0 + 5);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Petrificateur, 0));
-
-        move_to(x0 + 1, y0 + 6);
-        scr_printf(" ❄️  Freezer ");
-        move_to(x0 + 1 + width - 10, y0 + 6);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Freezer, 0));
-
-        move_to(x0 + 1, y0 + 7);
-        scr_printf(" 💲 Banque ");
-        move_to(x0 + 1 + width - 10, y0 + 7);
-        scr_printf(COLOR_YELLOW "-% 3d €" RESET, getTurretPrice(Banque, 0));
-    }
-    scr_printf(RESET);
+    menuFooter(left, y0, h, "", COLOR_GRAY "Échap ou Entrée : retour");
 }

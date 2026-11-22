@@ -238,7 +238,7 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
         struct Cell cell = grid.cells[cx][cy];
 
         int terminal_x = (cell.x * (CELL_WIDTH + GAP) + 3);
-        int terminal_y = (cell.y * (CELL_HEIGHT + GAP / 2) + 2);
+        int terminal_y = (cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP);
         int px = terminal_x + (CELL_WIDTH + GAP) * (enemy->grid_x - (int)enemy->grid_x);
         int py = terminal_y + (CELL_HEIGHT + GAP / 2) * (enemy->grid_y - (int)enemy->grid_y);
 
@@ -271,11 +271,11 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             {
                 sprite_anim = 0;
             }
-            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + 2 < py)
+            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP < py)
             {
                 sprite_anim = 1;
             }
-            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + 2 > py)
+            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + GRID_TOP > py)
             {
                 sprite_anim = 3;
             }
@@ -412,11 +412,11 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             {
                 sprite_anim = 0;
             }
-            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + 2 < py)
+            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP < py)
             {
                 sprite_anim = 1;
             }
-            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + 2 > py)
+            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + GRID_TOP > py)
             {
                 sprite_anim = 3;
             }
@@ -466,11 +466,11 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             {
                 sprite_anim = 0;
             }
-            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + 2 < py)
+            else if (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP < py)
             {
                 sprite_anim = 1;
             }
-            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + 2 > py)
+            else if (enemy->next_cell.x * (CELL_HEIGHT + GAP / 2) + GRID_TOP > py)
             {
                 sprite_anim = 3;
             }
@@ -548,9 +548,9 @@ void drawEnemies(EnemyPool ep, Grid grid) // Dessine les ennemis sur un chemin V
             }
         }
 
-        // move_to((enemy->next_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + 2));
+        // move_to((enemy->next_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->next_cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP));
         // scr_printf("N%d", i);
-        // move_to((enemy->previous_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->previous_cell.y * (CELL_HEIGHT + GAP / 2) + 2));
+        // move_to((enemy->previous_cell.x * (CELL_WIDTH + GAP) + 3), (enemy->previous_cell.y * (CELL_HEIGHT + GAP / 2) + GRID_TOP));
         // scr_printf("P%d", i);
         if (enemy->type == ENEMY_SLIME_BOSS || enemy->type == ENEMY_BOSS_STUN)
         {
@@ -732,7 +732,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             gs->health -= enemy->damage;
             for (size_t i = 0; i < CELL_HEIGHT; i++)
             {
-                move_to((int)enemy->grid_x * (CELL_WIDTH + GAP) + 2, (int)enemy->grid_y * (CELL_HEIGHT + GAP / 2) + 2 + i);
+                move_to((int)enemy->grid_x * (CELL_WIDTH + GAP) + 2, (int)enemy->grid_y * (CELL_HEIGHT + GAP / 2) + GRID_TOP + i);
                 scr_printf(COLOR_STANDARD_BG "       ");
             }
         }
@@ -749,7 +749,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
                 labels->labels[labels->count].duration = 2;
                 labels->labels[labels->count].text = enemy->money;
                 labels->labels[labels->count].x = (enemy->grid_x * (CELL_WIDTH + GAP) + 3);
-                labels->labels[labels->count].y = (enemy->grid_y * (CELL_HEIGHT + GAP / 2) + 2);
+                labels->labels[labels->count].y = (enemy->grid_y * (CELL_HEIGHT + GAP / 2) + GRID_TOP);
                 labels->count++;
             }
         }

@@ -9,8 +9,14 @@
 
 #define SAVE_SLOTS 7 // emplacements save_0 à save_6
 
+// Signature et version du format : une sauvegarde d'une autre version du jeu est refusée proprement
+#define SAVE_MAGIC 0x44525441 // "ATRD"
+#define SAVE_VERSION 2
+
 struct SerializedGameData
 {
+    int magic;
+    int version;
     Grid grid; // tout le contenu de la grid avec cells en NULL
     GameStats gameStats;
     int waveIndex;
