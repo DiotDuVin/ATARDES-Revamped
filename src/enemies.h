@@ -15,6 +15,11 @@ enum EnemyType
     ENEMY_HIGHTUX,
     ENEMY_TANK,
     ENEMY_BOSS_STUN,
+    ENEMY_HEALER,        // soigne les ennemis autour de lui
+    ENEMY_MINI_SPLITTER, // petit morceau de splitter
+    ENEMY_SPLITTER,      // se divise en 2 mini splitters à sa mort
+    ENEMY_BIG_SPLITTER,  // se divise en 2 splitters
+    ENEMY_BOSS_SPLITTER, // boss : se divise en 4 gros splitters
     ENEMY_COUNT // Doit être placé dernier Ceci n'est pas un vrai ennemi mais permet de définir automatiquement combien d’ennemis sont dans l'enum
 };
 
@@ -49,6 +54,8 @@ struct Enemy
     float temps_recharge;
     float last_hit;
     float temps_rest;
+    float ability_timer; // compteur de la capacité spéciale (soin du guérisseur)
+    float burn_damage;   // dégâts de chaque brûlure de l'Inferno
 
     // Indice intentionnellement flottant pour permette un positionnement dynamique dans chaque cellule
     float grid_x;
@@ -122,3 +129,18 @@ int updateWaveSystem(WaveSystem *ws, Grid grid, EnemyPool *ep, float dt, GameSta
 
 // Réalise et affiche un simulation sur plusieurs vagues
 void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs);
+// Division à la mort : renvoie le nombre d'enfants (0 si l'ennemi ne se divise pas) et leur type dans *child
+int enemyChildren(enum EnemyType type, enum EnemyType *child);
+// PV totaux à vaincre, enfants compris (un splitter "vaut" ses PV + ceux de ses morceaux)
+float enemyEffectiveHP(enum EnemyType type);
+
+// Puissance des vagues : base + linéaire x vague + quadratique x vague² (voir getWaveByIndex)
+#define WAVE_POWER_BASE 10
+#define WAVE_POWER_LINEAR 15
+#define WAVE_POWER_QUADRATIC 1.5f
+
+// Soin du guérisseur
+#define HEAL_INTERVAL 2.5f // secondes entre deux soins
+#define HEAL_RADIUS 1.5f   // en cases
+#define HEAL_RATIO 0.2f    // part des PV max rendue
+#define HEAL_MAX 15.0f     // soin maximal par ennemi et par soin

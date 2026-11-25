@@ -614,6 +614,31 @@ static const EnemySprite SPRITE_TANK = {8, {
     {".....hhhh.....", "....hhrhhkkkkk", "....hhhhh.....", ".hhhhhhhhhhhh.", "hhhggggggggghh", "hGGGGGGGGGGGGh", "kKkKkKkKkKkKkK", ".KKKKKKKKKKKK."},
 }};
 
+static const EnemySprite SPRITE_HEALER = {8, {
+    {"..wwww..", ".wwwwww.", ".wkwwkw.", ".wwwwww.", "wwwggwww", "wwggggww", "wwwggwww", ".W.WW.W."},
+    {"..wwww..", ".wwwwww.", ".wkwwkw.", ".wwwwww.", "wwwggwww", "wwggggww", "wwwggwww", "W..WW..W"},
+}};
+
+static const EnemySprite SPRITE_MINI_SPLITTER = {4, {
+    {".gg.", "gkgk", "gggg", "g..g"},
+    {".gg.", "gkgk", "gggg", ".gg."},
+}};
+
+static const EnemySprite SPRITE_SPLITTER = {6, {
+    {"..gggg..", ".gggggg.", "gkggkggg", "gggGgggg", "ggGggggg", ".gggggg."},
+    {"........", "..gggg..", ".gkggkgg", "gggGgggg", "ggGggggg", "gggggggg"},
+}};
+
+static const EnemySprite SPRITE_BIG_SPLITTER = {8, {
+    {"...hhhhh...", ".hhhhhhhhh.", "hhkhhhhkhhh", "hhhhGhhhhhh", "hhhhhGhhGhh", "hhGhhhhGhhh", ".hhGhhhhhh.", "..hhhhhhh.."},
+    {"...........", "...hhhhh...", ".hhkhhhhkh.", "hhhhGhhhhhh", "hhhhhGhhGhh", "hhGhhhhGhhh", "hhhGhhhhhhh", ".hhhhhhhhh."},
+}};
+
+static const EnemySprite SPRITE_BOSS_SPLITTER = {11, {
+    {"....Y.YY.Y....", "....YYYYYY....", "..pppppppppp..", ".pppppppppppp.", "ppkkppppppkkpp", "pppppGppppGppp", "pppGpppGpppppp", "ppppppGppppGpp", "pGpppppppGpppp", ".pppppppppppp.", "..PPPPPPPPPP.."},
+    {"....Y.YY.Y....", "....YYYYYY....", "...pppppppp...", "..pppppppppp..", ".pkkppppppkkp.", "pppppGppppGppp", "pppGpppGpppppp", "ppppppGppppGpp", "pGpppppppGpppp", "pppppppppppppp", ".PPPPPPPPPPPP."},
+}};
+
 static const EnemySprite *enemy_sprite(enum EnemyType type)
 {
     switch (type)
@@ -625,6 +650,11 @@ static const EnemySprite *enemy_sprite(enum EnemyType type)
     case ENEMY_SPIDER: return &SPRITE_SPIDER;
     case ENEMY_SLIME_BOSS: return &SPRITE_SLIME;
     case ENEMY_TANK: return &SPRITE_TANK;
+    case ENEMY_HEALER: return &SPRITE_HEALER;
+    case ENEMY_MINI_SPLITTER: return &SPRITE_MINI_SPLITTER;
+    case ENEMY_SPLITTER: return &SPRITE_SPLITTER;
+    case ENEMY_BIG_SPLITTER: return &SPRITE_BIG_SPLITTER;
+    case ENEMY_BOSS_SPLITTER: return &SPRITE_BOSS_SPLITTER;
     default: return NULL; // le boss électrique est dessiné par programme
     }
 }

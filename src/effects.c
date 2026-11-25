@@ -12,6 +12,8 @@ enum FxType
     FX_FROST,     // Freezer : onde de givre
     FX_STUN,      // Pétrificateur : rayon + cercle de pierre
     FX_COINS,     // Banque : pièces et gain
+    FX_HEAL,      // Guérisseur : onde verte et croix qui montent
+    FX_SPLIT,     // Splitter : éclaboussure verte
 };
 
 typedef struct Fx
@@ -115,6 +117,24 @@ void fx_coins(int x, int y, int amount)
         return;
     cell_center_px(x, y, &fx->x0, &fx->y0);
     fx->amount = amount;
+}
+
+void fx_heal(const struct Enemy *healer, float radius)
+{
+    Fx *fx = fx_new(FX_HEAL, 0.6f);
+    if (!fx)
+        return;
+    enemy_center_px(healer, &fx->x0, &fx->y0);
+    fx->radius = radius * (CELL_WIDTH + GAP);
+}
+
+void fx_split(const struct Enemy *splitter)
+{
+    Fx *fx = fx_new(FX_SPLIT, 0.35f);
+    if (!fx)
+        return;
+    enemy_center_px(splitter, &fx->x0, &fx->y0);
+    fx->radius = splitter->type == ENEMY_BOSS_SPLITTER ? 14 : (splitter->type == ENEMY_BIG_SPLITTER ? 9 : 6);
 }
 
 void fx_update(float dt)
@@ -395,6 +415,44 @@ static void draw_coins(const Fx *fx)
     }
 }
 
+static short pick_heal(const Fx *fx, int x, int y, float depth)
+{
+    float p = fx->t / fx->duration;
+    unsigned int h = fx_hash(x, y, fx->seed);
+    if (h % 100 < (unsigned)(35 + 55 * p))
+        return -1;
+    (void)depth;
+    return p < 0.4f ? 120 : 77;
+}
+
+static void draw_heal(const Fx *fx)
+{
+    float p = fx->t / fx->duration;
+    fx_ring(fx->x0, fx->y0, 3 + (fx->radius - 3) * ease_out(p), 1.6f, fx, pick_heal);
+    // petites croix vertes qui montent
+    for (int i = 0; i < 3; i++)
+    {
+        float x = fx->x0 + (i - 1) * 5, y = fx->y0 - 6 - 8 * ease_out(p) - (i == 1 ? 2 : 0);
+        short c = p < 0.6f ? 46 : 34;
+        px(x, y, c);
+        px(x - 1, y, c);
+        px(x + 1, y, c);
+        px(x, y - 1, c);
+        px(x, y + 1, c);
+    }
+}
+
+static void draw_split(const Fx *fx)
+{
+    float p = fx->t / fx->duration;
+    for (int i = 0; i < 14; i++)
+    {
+        float a = (fx_hash(fx->seed, i, 3) % 628) / 100.0f;
+        float d = fx->radius * (0.4f + 0.6f * ease_out(p)) * (0.6f + (fx_hash(fx->seed, i, 4) % 40) / 100.0f);
+        px(fx->x0 + cosf(a) * d, fx->y0 + sinf(a) * d * 0.8f + p * 3, i % 3 ? 70 : 22);
+    }
+}
+
 void fx_draw(void)
 {
     for (int i = 0; i < fx_count; i++)
@@ -408,6 +466,8 @@ void fx_draw(void)
         case FX_FROST: draw_frost(&effects[i]); break;
         case FX_STUN: draw_stun(&effects[i]); break;
         case FX_COINS: draw_coins(&effects[i]); break;
+        case FX_HEAL: draw_heal(&effects[i]); break;
+        case FX_SPLIT: draw_split(&effects[i]); break;
         }
     }
 }

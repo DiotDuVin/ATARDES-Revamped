@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <termios.h>
 #include <malloc.h>
+#include <sys/select.h>
 
 #include "render.h"
 #include "bigtext.h"
@@ -110,6 +111,7 @@ struct Turret
     float puissance_malus; // Puissance de l'effet subbit
     float last_shot_dx;
     float last_shot_dy;
+    int target_mode;         // mode de ciblage (enum TargetMode, voir tower.h)
 };
 
 typedef struct EnemyPool
@@ -290,6 +292,40 @@ void nsleep_seconds(double seconds);
 #define SPEED_CONTROL_PAUSE "\033[38;5;222m"
 
 char get_key_press();
+
+// Événements lus après le caractère Échap (\033)
+enum InputType
+{
+    INPUT_NONE,
+    INPUT_ESCAPE, // touche Échap seule
+    INPUT_ARROW,  // flèche : key = 'A' (haut), 'B' (bas), 'C' (droite), 'D' (gauche)
+    INPUT_MOUSE,  // souris : key = bouton, x / y = position (colonne / ligne)
+    INPUT_KEY,    // touche normale : key = caractère
+    INPUT_OTHER,  // séquence d'échappement inconnue (ignorée)
+};
+#define MOUSE_LEFT 0
+#define MOUSE_RIGHT 2
+#define MOUSE_WHEEL_UP 64
+#define MOUSE_WHEEL_DOWN 65
+typedef struct InputEvent
+{
+    enum InputType type;
+    int key;
+    int x, y;
+    bool pressed;
+} InputEvent;
+int read_key_timeout(int timeout_ms);
+InputEvent read_escape_sequence(void);
+// Lit le prochain événement en attente (touche, flèche, Échap ou souris), INPUT_NONE s'il n'y en a pas
+InputEvent poll_input(void);
+// Vrai pour un vrai clic (bouton appuyé), faux pour un mouvement, un relâchement ou la molette
+bool is_mouse_click(InputEvent ev);
+// Vide les touches en attente (ex : tapées pendant le lancement)
+void flush_input(void);
+// Active / désactive l'envoi des clics de souris par le terminal
+#define MOUSE_ON "\033[?1003h\033[?1006h"  // clics + mouvements (pour le survol des menus), coordonnées en mode SGR
+#define MOUSE_OFF "\033[?1003l\033[?1006l"
+#define MOUSE_MOTION_FLAG 32 // ajouté au numéro de bouton quand la souris bouge
 void move_to(int x, int y);
 void clear_screen();
 void clear_line();
@@ -301,5 +337,4 @@ int width_center();
 int height_center();
 void checkTerminalSize(int *width, int *height);
 void drawRange(int term_width, int term_height, float range, float grid_x, float grid_y, bool fill);
-void anim_debut(int term_width, int term_height);
 void drawGameSpeed(int game_speed_control, int term_width, int game_speed_anim_pause);

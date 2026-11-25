@@ -145,12 +145,20 @@ static const TutoBlock chapter_enemies[] = {
      "Désactive les tourelles proches de lui (rayon de 2,5 cases) pendant 2,5 s. Arrive à la vague 20.", NONE, ENEMY_BOSS_STUN},
     {BLOCK_TEXT, NULL, COLOR_TANK_BASE, "Tank (boss)",
      "Une montagne de PV, insensible au gel et à la pétrification. Arrive à la vague 30.", NONE, ENEMY_TANK},
+    {BLOCK_TEXT, NULL, "\033[38;5;255m", "Guérisseur",
+     "Toutes les 2,5 s, rend des PV aux ennemis autour de lui. À éliminer en priorité (mode de ciblage !). À partir de la vague 5.", NONE, ENEMY_HEALER},
+    {BLOCK_TEXT, NULL, "\033[38;5;70m", "Splitter", "Se divise en 2 mini splitters quand il est détruit. À partir de la vague 2.", NONE, ENEMY_SPLITTER},
+    {BLOCK_TEXT, NULL, "\033[38;5;70m", "Mini splitter", "Petit et rapide, ne rapporte rien.", NONE, ENEMY_MINI_SPLITTER},
+    {BLOCK_TEXT, NULL, "\033[38;5;28m", "Gros splitter", "Se divise en 2 splitters. À partir de la vague 10.", NONE, ENEMY_BIG_SPLITTER},
+    {BLOCK_TEXT, NULL, "\033[38;5;135m", "Boss splitter",
+     "Se divise en 4 gros splitters... qui se divisent à leur tour. Les dégâts de zone font merveille. Arrive à la vague 25.", NONE, ENEMY_BOSS_SPLITTER},
 };
 
 static const TutoBlock chapter_tips[] = {
     {BLOCK_SPEEDS, NULL, NULL, NULL, NULL, NONE, NONE},
     {BLOCK_TEXT, NULL, COLOR_YELLOW, "Astuces",
      "Une tourelle sélectionnée affiche sa portée (cercle en pointillés).\n"
+     "Dans le menu d'une tourelle, la ligne Cible choisit quel ennemi viser en premier.\n"
      "Vendre une tourelle rend 80 % de son prix.\n"
      "Le Mortier a une portée minimale : place-le loin du chemin.\n"
      "Contre le Boss électrique, garde des tourelles à longue portée.\n"
@@ -248,7 +256,7 @@ static void turret_stats(enum TurretType type, char *out, size_t size)
             break;
         }
         case Inferno:
-            snprintf(line + n, sizeof(line) - n, "portée %s, brûle %d ennemis pendant %d s", range, t.nb_ennemi[lvl], lvl + 1);
+            snprintf(line + n, sizeof(line) - n, "portée %s, brûle %d ennemis pendant %d s", range, t.nb_ennemi[lvl], INFERNO_BURN_TIME(lvl));
             break;
         case Freezer:
             snprintf(line + n, sizeof(line) - n, "portée %s, ralentit de %d %% pendant %d s", range, (int)((1 - t.puissance_effet[lvl]) * 100 + 0.5), lvl + 1);
@@ -547,7 +555,7 @@ static void draw_page(int page, int term_width)
     // Bas de la fenêtre : aide et numéro de page
     int footer_y = box_y + box_h - 2 - ui_text_rows();
     scr_printf(RESET);
-    ui_text_fit(content_left, footer_y, content_width - 30, COLOR_GRAY "Entrée : suite   Retour : précédent   Échap : fermer");
+    ui_text_fit(content_left, footer_y, content_width - 30, COLOR_GRAY "Entrée ou clic : suite   Retour : précédent   Échap : fermer");
     char number[32];
     snprintf(number, sizeof(number), COLOR_GRAY "%d/%d", page < 0 ? 0 : page + 1, page_count);
     ui_text(content_left + content_width - ui_text_width(number), footer_y, number);
@@ -564,34 +572,34 @@ enum TutorialResult run_tutorial(int term_width, int term_height)
 
     while (page < page_count)
     {
-        int c = get_key_press();
         int previous = page;
-        if (c == 10 || c == ' ')
-            page++;
-        else if (c == 8 || c == 127) // Retour arrière
-            page = page > -1 ? page - 1 : -1;
-        else if (c == 27) // flèches : \\033 [ C (droite) / D (gauche), ou Échap seul
+        bool leave = false;
+        // Tous les événements en attente : les mouvements de souris (très nombreux) ne doivent pas s'accumuler
+        for (int n = 0; n < 64 && !leave && page == previous; n++)
         {
-            msleep(5);
-            if (get_key_press() == '[')
-            {
-                int arrow = get_key_press();
-                if (arrow == 'C')
-                    page++;
-                else if (arrow == 'D')
-                    page = page > -1 ? page - 1 : -1;
-            }
-            else
+            InputEvent ev = poll_input();
+            if (ev.type == INPUT_NONE)
+                break;
+            int c = ev.type == INPUT_KEY ? ev.key : 0;
+            bool next = c == 10 || c == ' ' || (ev.type == INPUT_ARROW && ev.key == 'C') || (is_mouse_click(ev) && ev.key == MOUSE_LEFT) || (ev.type == INPUT_MOUSE && ev.pressed && ev.key == MOUSE_WHEEL_DOWN);
+            bool prev = c == 8 || c == 127 || (ev.type == INPUT_ARROW && ev.key == 'D') || (is_mouse_click(ev) && ev.key == MOUSE_RIGHT) || (ev.type == INPUT_MOUSE && ev.pressed && ev.key == MOUSE_WHEEL_UP);
+            if (next)
+                page++;
+            else if (prev)
+                page = page > -1 ? page - 1 : -1; // Retour arrière, flèche gauche, clic droit
+            else if (ev.type == INPUT_ESCAPE)
             {
                 result = TUTORIAL_BACK;
-                break;
+                leave = true;
+            }
+            else if (c == 'q' || c == 'Q')
+            {
+                result = TUTORIAL_QUIT;
+                leave = true;
             }
         }
-        else if (c == 'q' || c == 'Q')
-        {
-            result = TUTORIAL_QUIT;
+        if (leave)
             break;
-        }
 
         if (page != previous && page < page_count)
             draw_page(page, term_width);

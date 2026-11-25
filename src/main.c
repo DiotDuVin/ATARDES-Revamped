@@ -7,6 +7,7 @@
 #include "tutorial.h"
 #include "pixelart.h"
 #include "effects.h"
+#include "title.h"
 
 #include <string.h>
 #include <sys/select.h>
@@ -35,6 +36,7 @@ bool save_screen = false;
 // le menu pause (Échap) est ouvert ; controls_view : on y affiche la liste des commandes
 bool pause_menu = false;
 bool controls_view = false;
+bool scores_view = false; // le menu pause affiche les meilleurs scores
 // mis à vrai par "Quitter" dans le menu pause
 bool quit_requested = false;
 // vraie quand la range d'une tourelle est affichée (sur la quelle est placée le curseur), pour pouvoir effacer la range une fois qu'elle ne l'est plus
@@ -61,6 +63,12 @@ void handle_enter_key()
     if (grid.cells[selected_cell_x][selected_cell_y].hasTurret) // permet de savoir si la cell selctionnée a déja une tourelle (cas de l'upgrade et de la vente)
     {
         int upgrade_price = getTurretPrice(grid.cells[selected_cell_x][selected_cell_y].turret.type, grid.cells[selected_cell_x][selected_cell_y].turret.lvl + 1);
+        if (ligne == 3) // mode de ciblage : on passe au suivant, le menu reste ouvert
+        {
+            struct Turret *t = &grid.cells[selected_cell_x][selected_cell_y].turret;
+            t->target_mode = (t->target_mode + 1) % TARGET_MODE_COUNT;
+            return;
+        }
         if (ligne == 1 && (upgrade_price <= 0 || gameStats.cash < upgrade_price))
             return; // amélioration impossible : le menu reste ouvert
         if (ligne == 1) // amélioration
@@ -90,19 +98,6 @@ void handle_enter_key()
     drawFullGrid(grid);
 }
 
-// Lit un caractère s'il arrive dans les `timeout_ms` millisecondes, sinon renvoie 0.
-// (évite de bloquer le jeu si l'utilisateur appuie sur Échap seul)
-int read_key_timeout(int timeout_ms)
-{
-    fd_set set;
-    FD_ZERO(&set);
-    FD_SET(STDIN_FILENO, &set);
-    struct timeval tv = {0, timeout_ms * 1000};
-    if (select(STDIN_FILENO + 1, &set, NULL, NULL, &tv) > 0)
-        return getchar();
-    return 0;
-}
-
 // Ferme tous les menus et redessine la grille
 void closeMenus()
 {
@@ -110,6 +105,7 @@ void closeMenus()
     save_screen = false;
     pause_menu = false;
     controls_view = false;
+    scores_view = false;
     ligne = 1;
     fillBG(1, 1, width + 1, height + 1);
     drawFullGrid(grid);
@@ -118,10 +114,10 @@ void closeMenus()
 // Échap : ferme le menu ouvert, ou ouvre le menu pause
 void handle_escape()
 {
-    if (pause_menu && controls_view)
+    if (pause_menu && (controls_view || scores_view))
     {
-        controls_view = false; // retour de la liste des commandes au menu pause
-        ligne = PAUSE_CONTROLS;
+        ligne = controls_view ? PAUSE_CONTROLS : PAUSE_SCORES; // retour au menu pause
+        controls_view = scores_view = false;
     }
     else if (pause_menu || selection_active || save_screen)
         closeMenus();
@@ -135,10 +131,10 @@ void handle_escape()
 // Entrée dans le menu pause
 void handle_pause_enter()
 {
-    if (controls_view)
+    if (controls_view || scores_view)
     {
-        controls_view = false;
-        ligne = PAUSE_CONTROLS;
+        ligne = controls_view ? PAUSE_CONTROLS : PAUSE_SCORES;
+        controls_view = scores_view = false;
         return;
     }
     switch (ligne)
@@ -168,21 +164,20 @@ void handle_pause_enter()
         fillBG(1, 1, width + 1, height + 1);
         drawFullGrid(grid);
         break;
+    case PAUSE_SCORES:
+        scores_view = true;
+        fillBG(1, 1, width + 1, height + 1);
+        drawFullGrid(grid);
+        break;
     case PAUSE_QUIT:
         quit_requested = true;
         break;
     }
 }
 
-void handle_arrow_keys()
+// Flèche (c = 'A' haut, 'B' bas, 'C' droite, 'D' gauche) : déplace la sélection sur le plateau ou dans le menu ouvert
+void handle_arrow_keys(char c)
 {
-    // Une flèche envoie 3 caractères : \033 [ A/B/C/D. Le \033 a déjà été lu.
-    if (read_key_timeout(20) != '[')
-    {
-        handle_escape(); // touche Échap seule
-        return;
-    }
-    char c = read_key_timeout(20);
     int cell_x = selected_cell_x;
     int cell_y = selected_cell_y;
     bool up = c == 'A';
@@ -303,11 +298,134 @@ void handle_arrow_keys()
             ligne = CLAMP(ligne, 1, PAUSE_ITEMS);
         else if (save_screen) // 7 emplacements => lignes 3 à 9
             ligne = CLAMP(ligne, 3, 9);
-        else if (grid.cells[selected_cell_x][selected_cell_y].hasTurret) // menu d'amélioration : améliorer ou vendre
-            ligne = CLAMP(ligne, 1, 2); // (avant, le curseur pouvait descendre jusqu'à 7 et disparaître)
+        else if (grid.cells[selected_cell_x][selected_cell_y].hasTurret) // menu d'amélioration : améliorer, vendre, (cible)
+        {
+            struct Turret *t = &grid.cells[selected_cell_x][selected_cell_y].turret;
+            bool targeting = turretHasTargeting(t->type);
+            ligne = CLAMP(ligne, 1, targeting ? 3 : 2);
+            // sur la ligne "Cible", gauche / droite changent le mode
+            if (targeting && ligne == 3 && (left || right))
+                t->target_mode = (t->target_mode + (right ? 1 : TARGET_MODE_COUNT - 1)) % TARGET_MODE_COUNT;
+        }
         else // boutique
             ligne = CLAMP(ligne, 1, SHOP_SIZE);
     }
+}
+
+/*
+Souris. Survol d'une case : elle est sélectionnée (comme avec les flèches). Clic gauche : la boutique (ou le menu de la tourelle) s'ouvre.
+Dans un menu : le survol sélectionne une ligne et le clic la valide (comme Entrée). Clic en dehors d'un menu ou clic droit : ferme le menu.
+Molette : monte / descend dans les menus.
+Renvoie 10 (Entrée) si le clic doit valider la ligne, 1 sinon (pour redessiner les menus), 0 si rien n'a changé.
+*/
+// Case de terrain (emplacement de tourelle) sous la position (mx, my) du terminal ; faux si aucune
+// (chemin, espace entre deux cases, en dehors du plateau)
+static bool cellAt(int mx, int my, int *cx, int *cy)
+{
+    int col = mx - 3, row = my - GRID_TOP; // même origine que draw_terrain_cell (pixelart.c)
+    if (col < 0 || row < 0 || col % (CELL_WIDTH + GAP) >= CELL_WIDTH || row % (CELL_HEIGHT + GAP / 2) >= CELL_HEIGHT)
+        return false;
+    *cx = col / (CELL_WIDTH + GAP);
+    *cy = row / (CELL_HEIGHT + GAP / 2);
+    return *cx < grid.width && *cy < grid.height && grid.cells[*cx][*cy].type == TERRAIN;
+}
+
+static void selectCell(int cx, int cy)
+{
+    grid.cells[selected_cell_x][selected_cell_y].selected = false;
+    selected_cell_x = cx;
+    selected_cell_y = cy;
+    grid.cells[cx][cy].selected = true;
+}
+
+int handle_mouse(InputEvent ev)
+{
+    if (!ev.pressed)
+        return 0;
+    bool menu_open = selection_active || save_screen || pause_menu;
+
+    // Survol : la case (ou la ligne du menu) sous la souris est sélectionnée (un clic la validera)
+    if (ev.key & MOUSE_MOTION_FLAG)
+    {
+        if (!menu_open)
+        {
+            int cx, cy;
+            if (!cellAt(ev.x, ev.y, &cx, &cy) || (cx == selected_cell_x && cy == selected_cell_y))
+                return 0;
+            selectCell(cx, cy);
+            return 1;
+        }
+        if (pause_menu && (controls_view || scores_view))
+            return 0;
+        int line, first = 1;
+        if (pause_menu)
+            line = menuLineAt(ev.x, ev.y, 1, PAUSE_ITEMS);
+        else if (save_screen)
+            line = menuLineAt(ev.x, ev.y, 0, SAVE_SLOTS), first = 3;
+        else if (grid.cells[selected_cell_x][selected_cell_y].hasTurret)
+            line = menuLineAt(ev.x, ev.y, 0, turretHasTargeting(grid.cells[selected_cell_x][selected_cell_y].turret.type) ? 3 : 2);
+        else
+            line = menuLineAt(ev.x, ev.y, 0, SHOP_SIZE);
+        if (line < 0 || ligne == line + first)
+            return 0;
+        ligne = line + first;
+        return 1;
+    }
+    if (ev.key == MOUSE_WHEEL_UP || ev.key == MOUSE_WHEEL_DOWN)
+    {
+        if (!menu_open)
+            return 0;
+        handle_arrow_keys(ev.key == MOUSE_WHEEL_UP ? 'A' : 'B');
+        return 1;
+    }
+    if (ev.key == MOUSE_RIGHT)
+    {
+        if (menu_open)
+            handle_escape();
+        return 1;
+    }
+    if (ev.key != MOUSE_LEFT)
+        return 0;
+
+    if (menu_open)
+    {
+        if (!menuContains(ev.x, ev.y))
+        {
+            closeMenus();
+            return 1;
+        }
+        if (pause_menu && (controls_view || scores_view))
+            return 10; // retour au menu pause
+        int line;
+        if (pause_menu)
+        {
+            line = menuLineAt(ev.x, ev.y, 1, PAUSE_ITEMS);
+            if (line < 0)
+                return 1;
+            ligne = line + 1;
+            return 10; // le menu pause valide directement
+        }
+        int first = save_screen ? 3 : 1;
+        int count = SHOP_SIZE;
+        if (save_screen)
+            count = SAVE_SLOTS;
+        else if (grid.cells[selected_cell_x][selected_cell_y].hasTurret)
+            count = turretHasTargeting(grid.cells[selected_cell_x][selected_cell_y].turret.type) ? 3 : 2;
+        line = menuLineAt(ev.x, ev.y, 0, count);
+        if (line < 0)
+            return 1;
+        ligne = line + first;
+        return 10; // clic : validation de la ligne
+    }
+
+    // Clic sur le plateau : sélection de la case visée et ouverture de la boutique
+    int cx, cy;
+    if (!cellAt(ev.x, ev.y, &cx, &cy))
+        return 0;
+    selectCell(cx, cy);
+    selection_active = true; // ouvre la boutique (ou le menu de la tourelle)
+    ligne = 1;
+    return 1;
 }
 
 struct termios base_t_settings;
@@ -318,6 +436,7 @@ void configTerminal()
     // Écran alternatif : le jeu s'affiche sur un écran séparé, et le terminal
     // retrouve son contenu d'origine à la fin (comme vim ou htop).
     printf("\033[?1049h");
+    printf(MOUSE_ON); // le terminal envoie les clics de souris
     hide_cursor();
     fflush(stdout);
 
@@ -337,7 +456,7 @@ void configTerminal()
 void restoreTerminal()
 {
     scr_shutdown();
-    printf(RESET "\033[?1049l"); // quitte l'écran alternatif
+    printf(MOUSE_OFF RESET "\033[?1049l"); // désactive la souris et quitte l'écran alternatif
     show_cursor();
     fflush(stdout);
     tcsetattr(STDIN_FILENO, TCSANOW, &base_t_settings);
@@ -389,22 +508,37 @@ void handleResize()
     drawFullGrid(grid);
 }
 
-// Fenêtre affichée quand la partie est perdue (même taille que les autres menus)
+// Fenêtre affichée quand la partie est perdue (même taille que les autres menus) : résultat et classement
 void showGameOver()
 {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int rank = recordScore(waveSystem.current_wave_index, (int)(now.tv_sec - time_start));
+
+    menu_side_panel = false;
     int line_h = ui_text_rows() + 1;
     int x0, y0, w, h;
     menuGeometry(&x0, &y0, &w, &h);
     drawPanel(x0, y0, w, h, COLOR_RED);
     int cx = x0 + w / 2;
-    int y = y0 + h / 2 - line_h * 2;
+    int y = y0 + 2;
     ui_text_centered(cx, y, BOLD COLOR_RED "Partie terminée");
-    y += line_h * 2;
+    scr_printf(RESET);
+    y += line_h + 1;
     char text[64];
     snprintf(text, sizeof(text), "Tu as tenu %d vague%s", waveSystem.current_wave_index, waveSystem.current_wave_index > 1 ? "s" : "");
     ui_text_centered(cx, y, text);
-    y += line_h * 2;
-    ui_text_centered(cx, y, COLOR_GRAY "Entrée pour quitter");
+    y += line_h;
+    if (rank == 0)
+        ui_text_centered(cx, y, COLOR_YELLOW "Nouveau record !");
+    else if (rank > 0)
+    {
+        snprintf(text, sizeof(text), COLOR_GREEN "%de du classement", rank + 1);
+        ui_text_centered(cx, y, text);
+    }
+    y += line_h + 1;
+    drawScoresList(x0 + 4, x0 + w - 5, y, 5, rank);
+    ui_text_centered(cx, y0 + h - 2 - ui_text_rows(), COLOR_GRAY "Entrée ou clic pour quitter");
     scr_printf(RESET);
     scr_flush();
 
@@ -416,6 +550,12 @@ void showGameOver()
         int c = get_key_press();
         if (c == 10 || c == ' ' || c == 'q' || c == 'Q')
             break;
+        if (c == 27)
+        {
+            InputEvent ev = read_escape_sequence();
+            if (ev.type == INPUT_MOUSE && ev.pressed && ev.key == MOUSE_LEFT)
+                break; // un clic quitte aussi
+        }
         if (terminal_resized)
             handleResize();
         msleep(20);
@@ -490,7 +630,9 @@ void drawHUD(int game_speed_control, float fps, long runtime)
     scr_printf(RESET COLOR_STANDARD_BG);
 
     char left[96], right[96];
-    if (waveSystem.wave_timer > 0)
+    if (selection_active || pause_menu || save_screen)
+        snprintf(left, sizeof(left), BOLD "Vague %d" BOLD_RST COLOR_YELLOW "  Pause", waveSystem.current_wave_index);
+    else if (waveSystem.wave_timer > 0)
         snprintf(left, sizeof(left), BOLD "Vague %d" BOLD_RST COLOR_GRAY "  prochaine dans %.1fs", waveSystem.current_wave_index, waveSystem.wave_timer);
     else
         snprintf(left, sizeof(left), BOLD "Vague %d", waveSystem.current_wave_index);
@@ -641,10 +783,9 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    enum TitleChoice title_choice = TITLE_NEW_GAME;
     if (!opt_play && !opt_sim)
-    {
-        anim_debut(width, height);
-    }
+        title_choice = title_screen(width, height); // intro et menu principal (voir title.c)
 
     fillBG(1, 1, width + 1, height + 1);
 
@@ -683,6 +824,10 @@ int main(int argc, char *argv[])
      * Gestion des paramètres spéciaux
      * ###############################
      */
+
+    // « Continuer » dans le menu principal : reprise de la partie sauvée en quittant (emplacement 0)
+    if (title_choice == TITLE_CONTINUE)
+        loadProgress(0, &grid, &gameStats, &waveSystem, &enemyPool, &labels);
 
     // La première cellule est initialement sélectionnée
     grid.cells[0][0].selected = true;
@@ -828,8 +973,9 @@ int main(int argc, char *argv[])
         // (avant, l'état "pause" restait bloqué si on fermait la boutique en achetant une tourelle)
         // Icône en haut à droite : pause pendant les menus, sinon la vitesse pendant 1,5 s après un changement
         // (elle recouvre une case du plateau, donc elle ne reste pas affichée en permanence ; la vitesse est aussi dans le bandeau)
-        if (selection_active || pause_menu)
-            drawGameSpeed(game_speed_control, width, true);
+        // (pendant les menus, "Pause" est écrit dans le bandeau du haut : l'icône chevaucherait les fenêtres)
+        if (selection_active || pause_menu || save_screen)
+            ;
         else if (speed_icon_timer > 0)
         {
             drawGameSpeed(game_speed_control, width, false);
@@ -851,15 +997,34 @@ int main(int argc, char *argv[])
         GESTION DES ENTREES CLAVIER
         ###########################
         */
+        // Toutes les touches et événements souris en attente sont traités (32 au maximum par image) :
+        // la souris peut envoyer beaucoup d'événements de mouvement, ils ne doivent pas s'accumuler
+        bool exit_game = false;
+        for (int event = 0; event < 32 && !exit_game; event++)
+        {
         int c = get_key_press();
-        if (c != 0)
+        if (c == 0)
+            break; // plus rien en attente
         {
             // Les actions du menu des sauvegardes ne concernent que les touches pressées quand il était déjà ouvert
             // (sinon l'Entrée qui l'ouvre depuis le menu pause chargerait immédiatement une sauvegarde)
             bool save_was_open = save_screen;
+            // Séquences d'échappement : Échap seul, flèches ou souris
+            if (c == 27)
+            {
+                InputEvent ev = read_escape_sequence();
+                if (ev.type == INPUT_ESCAPE)
+                    handle_escape();
+                else if (ev.type == INPUT_ARROW)
+                    handle_arrow_keys(ev.key);
+                c = 1; // valeur neutre : déclenche seulement le réaffichage des menus
+                if (ev.type == INPUT_MOUSE)
+                    c = handle_mouse(ev); // 10 si le clic vaut une validation (Entrée), 0 si rien n'a changé
+            }
             if (c == 'q' || c == 'Q')
             {
                 saveProgress(grid, gameStats, waveSystem.current_wave_index, 0);
+                exit_game = true;
                 break;
             }
             if ((c == 's' || c == 'S') && !selection_active && !pause_menu)
@@ -909,8 +1074,6 @@ int main(int argc, char *argv[])
                 ligne = 1;
                 selection_active = !selection_active;
             }
-            else if (c == 27) // Touches directionnelles commencent par le char (\033)
-                handle_arrow_keys();
 
             else if (c == 10 && selection_active) // ENTER
                 handle_enter_key();
@@ -920,12 +1083,15 @@ int main(int argc, char *argv[])
             if (quit_requested)
             {
                 saveProgress(grid, gameStats, waveSystem.current_wave_index, 0);
+                exit_game = true;
                 break;
             }
             if (pause_menu)
             {
                 if (controls_view)
                     showControls();
+                else if (scores_view)
+                    showScores();
                 else
                     showPauseMenu(ligne);
             }
@@ -962,6 +1128,9 @@ int main(int argc, char *argv[])
                     showSaveScreen(ligne); // affiché après l'action pour que l'état des emplacements soit à jour
             }
         }
+        }
+        if (exit_game)
+            break; // fin de la partie (Q ou "Quitter" dans le menu pause)
 
         // Limiteur d'images : on dort le temps restant pour ne pas dépasser TARGET_FPS images par seconde
         // (sinon, avec le nouveau moteur d'affichage très rapide, le jeu utiliserait 100% d'un processeur)

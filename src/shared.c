@@ -1,6 +1,4 @@
 #include "shared.h"
-#include "tutorial.h"
-#include "intro.h"
 
 int grid_top = 2; // modifié au démarrage selon la taille du texte
 
@@ -103,6 +101,93 @@ char get_key_press()
         return getchar();
     else
         return 0;
+}
+
+// Lit un caractère s'il arrive dans les `timeout_ms` millisecondes, sinon renvoie 0
+int read_key_timeout(int timeout_ms)
+{
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    struct timeval tv = {0, timeout_ms * 1000};
+    if (select(STDIN_FILENO + 1, &set, NULL, NULL, &tv) > 0)
+        return getchar();
+    return 0;
+}
+
+/*
+Lit la suite d'une séquence d'échappement (le caractère \033 vient d'être lu) :
+- flèches : \033 [ A/B/C/D
+- souris (mode SGR) : \033 [ < bouton ; colonne ; ligne M (appui) ou m (relâchement)
+- rien d'autre dans les 20 ms : touche Échap seule
+*/
+InputEvent read_escape_sequence(void)
+{
+    InputEvent ev = {INPUT_NONE, 0, 0, 0, false};
+    int c = read_key_timeout(20);
+    if (c != '[')
+    {
+        ev.type = INPUT_ESCAPE;
+        return ev;
+    }
+    c = read_key_timeout(20);
+    if (c >= 'A' && c <= 'D')
+    {
+        ev.type = INPUT_ARROW;
+        ev.key = c;
+        return ev;
+    }
+    if (c == '<')
+    {
+        int values[3] = {0, 0, 0}, k = 0;
+        while (true)
+        {
+            c = read_key_timeout(20);
+            if (c >= '0' && c <= '9')
+                values[k] = values[k] * 10 + (c - '0');
+            else if (c == ';' && k < 2)
+                k++;
+            else
+                break;
+        }
+        if (c == 'M' || c == 'm')
+        {
+            ev.type = INPUT_MOUSE;
+            ev.key = values[0]; // 0 gauche, 1 milieu, 2 droit, 64 molette haut, 65 molette bas
+            ev.x = values[1];
+            ev.y = values[2];
+            ev.pressed = c == 'M';
+        }
+        return ev;
+    }
+    ev.type = INPUT_OTHER; // séquence inconnue : ignorée
+    return ev;
+}
+
+InputEvent poll_input(void)
+{
+    InputEvent ev = {INPUT_NONE, 0, 0, 0, false};
+    int c = get_key_press();
+    if (c == 0)
+        return ev;
+    if (c == 27)
+        return read_escape_sequence();
+    ev.type = INPUT_KEY;
+    ev.key = c;
+    ev.pressed = true;
+    return ev;
+}
+
+bool is_mouse_click(InputEvent ev)
+{
+    return ev.type == INPUT_MOUSE && ev.pressed && !(ev.key & MOUSE_MOTION_FLAG) && ev.key < MOUSE_WHEEL_UP;
+}
+
+void flush_input(void)
+{
+    tcflush(STDIN_FILENO, TCIFLUSH);
+    while (get_key_press() != 0)
+        ;
 }
 
 // Les fonctions suivantes sont claires de par leurs noms (les "\033[" indiquent des actions sur l'affichage (voir README et les codes ANSI))
@@ -294,83 +379,3 @@ void drawGameSpeed(int game_speed_anim, int term_width, int game_speed_anim_paus
     }
 }
 
-// Animation de début de jeu / tutoriel (il ne s'agit que de boucle qui font se déplacer le curseur afin que l'annimation se produise)
-
-// Intro animée puis menu principal (Tutoriel / Jeu)
-void anim_debut(int term_width, int term_height)
-{
-    run_intro(term_width, term_height); // voir intro.c
-
-    char *spriteTuto[2][9] = {
-        {COLOR_GRAY "▗▄▄▄▖▗▖ ▗▖▗▄▄▄▖▗▄▖ ▗▄▄▖ ▗▄▄▄▖▗▄▄▄▖▗▖        ",
-         COLOR_GRAY "  █  ▐▌ ▐▌  █ ▐▌ ▐▌▐▌ ▐▌  █  ▐▌   ▐▌        ",
-         COLOR_GRAY "  █  ▐▌ ▐▌  █ ▐▌ ▐▌▐▛▀▚▖  █  ▐▛▀▀▘▐▌        ",
-         COLOR_GRAY "  █  ▝▚▄▞▘  █ ▝▚▄▞▘▐▌ ▐▌▗▄█▄▖▐▙▄▄▖▐▙▄▄▖     ",
-         "                                            ",
-         COLOR_GREEN "█▄      ▗▖▗▄▄▄▖▗▖ ▗▖                        ",
-         COLOR_GREEN "███▄    ▐▌▐▌   ▐▌ ▐▌                        ",
-         COLOR_GREEN "███▀    ▐▌▐▛▀▀▘▐▌ ▐▌                        ",
-         COLOR_GREEN "█▀   ▗▄▄▞▘▐▙▄▄▖▝▚▄▞▘                        "},
-        {COLOR_GREEN "█▄   ▗▄▄▄▖▗▖ ▗▖▗▄▄▄▖▗▄▖ ▗▄▄▖ ▗▄▄▄▖▗▄▄▄▖▗▖   ",
-         COLOR_GREEN "███▄   █  ▐▌ ▐▌  █ ▐▌ ▐▌▐▌ ▐▌  █  ▐▌   ▐▌   ",
-         COLOR_GREEN "███▀   █  ▐▌ ▐▌  █ ▐▌ ▐▌▐▛▀▚▖  █  ▐▛▀▀▘▐▌   ",
-         COLOR_GREEN "█▀     █  ▝▚▄▞▘  █ ▝▚▄▞▘▐▌ ▐▌▗▄█▄▖▐▙▄▄▖▐▙▄▄▖",
-         "                                            ",
-         COLOR_GRAY "   ▗▖▗▄▄▄▖▗▖ ▗▖                             ",
-         COLOR_GRAY "   ▐▌▐▌   ▐▌ ▐▌                             ",
-         COLOR_GRAY "   ▐▌▐▛▀▀▘▐▌ ▐▌                             ",
-         COLOR_GRAY "▗▄▄▞▘▐▙▄▄▖▝▚▄▞▘                             "}};
-
-    int tutorial_variable = 1;
-
-    while (true)
-    {
-        int c = get_key_press();
-        if (c == 'A')
-        {
-            tutorial_variable = 1;
-        }
-        else if (c == 'B')
-        {
-            tutorial_variable = 0;
-        }
-
-        int logo_x, logo_y;
-        logo_position(term_width, term_height, &logo_x, &logo_y);
-        scr_printf(RESET);
-        clear_screen();
-        draw_logo(logo_x, logo_y, 42);
-        draw_subtitle(term_width, term_height);
-        for (int i = 0; i < 9; i++)
-        {
-            move_to(term_width / 2 - 22, logo_y + LOGO_ROWS + 7 + i);
-            scr_puts(spriteTuto[tutorial_variable][i]);
-        }
-        scr_printf(RESET);
-        ui_text_centered(term_width / 2, term_height - 1 - ui_text_rows(), COLOR_GRAY "↑ ↓ choisir   Entrée valider   Q quitter");
-        scr_printf(RESET);
-        scr_flush();
-        if (c == 'q')
-        {
-            // free de tout automatique dans main.c/void cleanup()
-            exit(EXIT_SUCCESS);
-        }
-        if (c == 10 && tutorial_variable == 0)
-        {
-            break;
-        }
-        if (c == 10 && tutorial_variable == 1)
-        {
-            enum TutorialResult result = run_tutorial(term_width, term_height); // voir tutorial.c
-            if (result == TUTORIAL_QUIT)
-                exit(EXIT_SUCCESS);
-            if (result == TUTORIAL_DONE)
-                break; // tutoriel terminé : on lance la partie
-            // Échap : retour au menu
-        }
-        msleep(15); // inutile de vérifier le clavier plus souvent
-    }
-
-    scr_printf(RESET);
-    clear_screen();
-}

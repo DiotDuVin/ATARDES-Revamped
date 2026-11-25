@@ -24,6 +24,8 @@ void fx_flame_ring(int x, int y, float range);
 void fx_frost_wave(int x, int y, float range);
 void fx_stun_beam(int x, int y, const struct Enemy *target);
 void fx_coins(int x, int y, int amount);
+void fx_heal(const struct Enemy *healer, float radius); // onde verte du guérisseur
+void fx_split(const struct Enemy *splitter);              // éclaboussure quand un splitter se divise
 
 void fx_update(float dt); // fait avancer et supprime les effets terminés
 void fx_draw(void);       // dessine les effets en cours

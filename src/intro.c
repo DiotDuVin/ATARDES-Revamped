@@ -1,5 +1,6 @@
 #include "intro.h"
 #include "shared.h"
+#include "title.h"
 
 #include <string.h>
 
@@ -17,7 +18,7 @@ la vitesse est la même quel que soit l'ordinateur ou le terminal.
   3. le logo s'illumine puis prend sa couleur finale
   4. le sous-titre s'écrit lettre par lettre
 
-N'importe quelle touche passe l'animation.
+Une touche ou un clic passe l'animation (les simples mouvements de souris sont ignorés).
 */
 
 const char *ATARDES_LOGO[LOGO_ROWS] = {
@@ -47,9 +48,7 @@ const char *ATARDES_SUBTITLE = "Antique Terminal : Absolute Routing Defense Epic
 void logo_position(int term_width, int term_height, int *x, int *y)
 {
     *x = term_width / 2 - LOGO_WIDTH / 2;
-    *y = term_height / 2 - 21;
-    if (*y < 2)
-        *y = 2;
+    *y = title_logo_y(term_width, term_height); // même place que dans l'écran titre
 }
 
 // Découpe une ligne UTF-8 du logo en caractères (un par colonne)
@@ -215,13 +214,17 @@ void run_intro(int term_width, int term_height)
         double t = now_seconds() - start;
         if (t >= T_END)
             break;
-        if (get_key_press() != 0)
+        // Une touche ou un clic passe l'animation ; les mouvements de souris (très nombreux) sont ignorés
+        bool skip = false;
+        for (int n = 0; n < 64 && !skip; n++)
         {
-            // Une touche : on passe l'animation (et on vide les touches restantes)
-            while (get_key_press() != 0)
-                ;
-            break;
+            InputEvent ev = poll_input();
+            if (ev.type == INPUT_NONE)
+                break;
+            skip = ev.type == INPUT_KEY || ev.type == INPUT_ESCAPE || ev.type == INPUT_ARROW || is_mouse_click(ev);
         }
+        if (skip)
+            break;
         draw_frame(t, term_width, term_height);
         scr_flush();
         nsleep_seconds(1.0 / 60);

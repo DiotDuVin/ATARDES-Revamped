@@ -23,6 +23,24 @@ typedef struct BulletPool
 
 #endif
 
+// Modes de ciblage (dans quel ordre une tourelle choisit les ennemis à portée)
+enum TargetMode
+{
+    TARGET_FIRST,  // le plus avancé vers la sortie
+    TARGET_LAST,   // le moins avancé
+    TARGET_STRONG, // le plus de PV
+    TARGET_WEAK,   // le moins de PV
+    TARGET_CLOSE,  // le plus proche de la tourelle
+    TARGET_MODE_COUNT,
+};
+#define TARGET_MAX 512 // nombre maximal d'ennemis pris en compte pour un tir
+const char *targetModeName(int mode);
+bool turretHasTargeting(enum TurretType type);
+int sortTargets(Grid grid, EnemyPool ep, int x, int y, int mode, int order[TARGET_MAX]);
+
+// Durée de la brûlure de l'Inferno selon son niveau (en secondes)
+#define INFERNO_BURN_TIME(lvl) ((lvl) + 2)
+
 #define SHOP_SIZE 7 // nombre de tourelles dans la boutique
 
 void showTowerSelection(int ligne, bool hasTurret, struct Turret selected_tower, int cash);
@@ -31,18 +49,29 @@ enum TurretType shopTurretAt(int ligne);
 const char *turretName(enum TurretType type);
 void drawPanel(int x0, int y0, int w, int h, const char *border_color);
 // Menu pause (Échap) : Reprendre, Tutoriel, Sauvegardes, Commandes, Quitter
-#define PAUSE_ITEMS 5
+#define PAUSE_ITEMS 6
 enum PauseChoice
 {
     PAUSE_RESUME = 1,
     PAUSE_TUTORIAL,
     PAUSE_SAVES,
     PAUSE_CONTROLS,
+    PAUSE_SCORES,
     PAUSE_QUIT,
 };
 void showPauseMenu(int ligne);
 // Liste des touches du jeu (consultation seulement)
 void showControls(void);
+// Meilleurs scores
+void showScores(void);
+void drawScoresList(int left, int right, int y, int max_rows, int highlight);
+// Panneau de statistiques (niveau actuel -> suivant) à droite de la boutique et du menu d'amélioration
+extern bool menu_side_panel;
+int sidePanelWidth(void);
+void showStatsPanel(enum TurretType type, int lvl);
+// Souris : position dans les menus
+bool menuContains(int mx, int my);
+int menuLineAt(int mx, int my, int skip, int count);
 // Position et taille communes à toutes les fenêtres du jeu
 void menuGeometry(int *x0, int *y0, int *w, int *h);
 void showSaveScreen(int ligne);

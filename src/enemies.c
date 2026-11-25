@@ -1,5 +1,6 @@
 #include "enemies.h"
 #include "pixelart.h"
+#include "effects.h"
 #include <string.h>
 
 EnemyPool AllocEnemyPool() // pré-Alloue le tableau d’ennemis avec une taille initiale prédéterminée
@@ -135,8 +136,8 @@ struct Enemy defEnemy(Grid grid, enum EnemyType type, int start_x, int start_y)
     {
         enemy.type = ENEMY_TANK;
         enemy.is_boss = true;
-        enemy.hp = 1000;
-        enemy.maxHP = 1000;
+        enemy.hp = 800;
+        enemy.maxHP = 800;
         enemy.speed = 0.2f;
         enemy.damage = 20;
         enemy.money = 10;
@@ -166,7 +167,65 @@ struct Enemy defEnemy(Grid grid, enum EnemyType type, int start_x, int start_y)
         enemy.next_cell = grid.cells[start_x][start_y];
         enemy.on_last_cell = false;
     }
+    else
+    {
+        // Nouveaux ennemis : PV, vitesse, dégâts (PV retirés au joueur), argent rapporté
+        struct
+        {
+            enum EnemyType type;
+            float hp, speed;
+            int damage, money;
+            bool boss;
+        } stats[] = {
+            {ENEMY_HEALER, 25, 0.7f, 2, 3, false},
+            {ENEMY_MINI_SPLITTER, 4, 1.3f, 1, 0, false}, // 0 € : c'est le splitter qui rapporte
+            {ENEMY_SPLITTER, 14, 0.9f, 2, 2, false},
+            {ENEMY_BIG_SPLITTER, 40, 0.7f, 4, 3, false},
+            {ENEMY_BOSS_SPLITTER, 150, 0.4f, 10, 10, true},
+        };
+        for (size_t i = 0; i < sizeof(stats) / sizeof(stats[0]); i++)
+            if (stats[i].type == type)
+            {
+                enemy.type = type;
+                enemy.hp = enemy.maxHP = stats[i].hp;
+                enemy.speed = stats[i].speed;
+                enemy.damage = stats[i].damage;
+                enemy.money = stats[i].money;
+                enemy.is_boss = stats[i].boss;
+            }
+        enemy.state = ENEMY_STATE_ALIVE;
+        enemy.grid_x = (float)start_x;
+        enemy.grid_y = (float)start_y;
+        enemy.previous_cell = grid.cells[start_x][start_y];
+        enemy.next_cell = grid.cells[start_x][start_y];
+        enemy.on_last_cell = false;
+    }
     return enemy;
+}
+
+int enemyChildren(enum EnemyType type, enum EnemyType *child)
+{
+    switch (type)
+    {
+    case ENEMY_SPLITTER: *child = ENEMY_MINI_SPLITTER; return 2;
+    case ENEMY_BIG_SPLITTER: *child = ENEMY_SPLITTER; return 2;
+    case ENEMY_BOSS_SPLITTER: *child = ENEMY_BIG_SPLITTER; return 3;
+    default: return 0;
+    }
+}
+
+float enemyEffectiveHP(enum EnemyType type)
+{
+    // defEnemy a besoin d'une grille pour la position de départ : une grille d'une case suffit
+    struct Cell cell = {0};
+    struct Cell *column = &cell;
+    Grid grid = {0};
+    grid.width = grid.height = 1;
+    grid.cells = &column;
+    float hp = defEnemy(grid, type, 0, 0).maxHP;
+    enum EnemyType child;
+    int n = enemyChildren(type, &child);
+    return hp + n * (n > 0 ? enemyEffectiveHP(child) : 0);
 }
 
 struct Enemy *addEnemy(Grid grid, EnemyPool *ep, enum EnemyType type, int start_x, int start_y) // Ajoute un nouvel ennemi au tableau des enemies
@@ -276,6 +335,26 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             enemy->previous_cell = cell;
         }
 
+        // Guérisseur : soigne régulièrement les ennemis autour de lui
+        if (enemy->type == ENEMY_HEALER)
+        {
+            enemy->ability_timer += dt_sec;
+            if (enemy->ability_timer >= HEAL_INTERVAL)
+            {
+                enemy->ability_timer = 0;
+                for (int j = 0; j < ep->count; j++)
+                {
+                    struct Enemy *other = &ep->enemies[j];
+                    if (j == i || other->state != ENEMY_STATE_ALIVE || other->hp >= other->maxHP)
+                        continue;
+                    float dx = other->grid_x - enemy->grid_x, dy = other->grid_y - enemy->grid_y;
+                    if (dx * dx + dy * dy <= HEAL_RADIUS * HEAL_RADIUS)
+                        other->hp = MIN(other->maxHP, other->hp + MIN(other->maxHP * HEAL_RATIO, HEAL_MAX));
+                }
+                fx_heal(enemy, HEAL_RADIUS);
+            }
+        }
+
         float rand_factor = 0.4;
         // float rand_factor = 0.4 + ((float)rand() / RAND_MAX) * 0.2;
 
@@ -325,7 +404,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
                 if (enemy->temps_recharge < enemy->last_hit - enemy->temps_rest)
                 {
                     enemy->last_hit = enemy->temps_rest;
-                    enemy->hp -= 0.5;
+                    enemy->hp -= enemy->burn_damage;
                 }
                 if (enemy->temps_rest <= 0)
                 {
@@ -355,7 +434,7 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
             drawCell(enemy->previous_cell, grid);
             defragNeeded = true;
             gs->cash += enemy->money;
-            if (labels->count < labels->size) // sinon on dépasserait du tableau (beaucoup d'ennemis tués en même temps)
+            if (enemy->money > 0 && labels->count < labels->size) // sinon on dépasserait du tableau (beaucoup d'ennemis tués en même temps)
             {
                 labels->labels[labels->count].counter = 0;
                 labels->labels[labels->count].duration = 2;
@@ -363,6 +442,28 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
                 labels->labels[labels->count].x = (enemy->grid_x * (CELL_WIDTH + GAP) + 3);
                 labels->labels[labels->count].y = (enemy->grid_y * (CELL_HEIGHT + GAP / 2) + GRID_TOP);
                 labels->count++;
+            }
+
+            // Splitters : les morceaux apparaissent autour de l'ennemi détruit et continuent sa route
+            enum EnemyType child;
+            int children = enemyChildren(enemy->type, &child);
+            if (children > 0)
+            {
+                struct Enemy parent = *enemy; // copie : addEnemy peut déplacer le tableau en mémoire
+                float dir_x = parent.next_cell.x - (int)parent.grid_x, dir_y = parent.next_cell.y - (int)parent.grid_y;
+                for (int c = 0; c < children; c++)
+                {
+                    struct Enemy *piece = addEnemy(grid, ep, child, grid.start_x, grid.start_y);
+                    float offset = (c - (children - 1) / 2.0f) * 0.12f; // étalés le long du chemin
+                    piece->grid_x = parent.grid_x - dir_x * offset;
+                    piece->grid_y = parent.grid_y - dir_y * offset;
+                    piece->grid_x = CLAMP(piece->grid_x, 0.0f, grid.width - 0.01f);
+                    piece->grid_y = CLAMP(piece->grid_y, 0.0f, grid.height - 0.01f);
+                    piece->previous_cell = parent.previous_cell;
+                    piece->next_cell = parent.next_cell;
+                    piece->on_last_cell = parent.on_last_cell;
+                }
+                fx_split(&parent);
             }
         }
     }
@@ -381,8 +482,10 @@ void updateEnemies(EnemyPool *ep, Grid grid, GameStats *gs, Labels *labels, floa
 WavePattern getWaveByIndex(int waveIndex)
 {
     WavePattern wp = {
-        .target_POWER = (10 + 15 * waveIndex),
-        .target_POWERPS = 5 + 0.4 * waveIndex,
+        // Puissance totale de la vague et vitesse d'apparition : croissance quadratique,
+        // pour que la difficulté suive l'économie du joueur qui s'accumule au fil des vagues
+        .target_POWER = WAVE_POWER_BASE + WAVE_POWER_LINEAR * waveIndex + WAVE_POWER_QUADRATIC * waveIndex * waveIndex,
+        .target_POWERPS = 5 + 0.4 * waveIndex + 0.015 * waveIndex * waveIndex,
         .random_coeffs = {0},
         .min_spawns = {0}};
 
@@ -395,6 +498,14 @@ WavePattern getWaveByIndex(int waveIndex)
     wp.random_coeffs[ENEMY_SLIME_BOSS] = CLAMP(-0.1f + 0.2f * waveIndex / 20, 0.0f, 0.2f);
     wp.random_coeffs[ENEMY_BOSS_STUN] = CLAMP(-0.15f + 0.2f * waveIndex / 30, 0.0f, 0.2f);
     wp.random_coeffs[ENEMY_TANK] = CLAMP(-0.20f + 0.2f * waveIndex / 40, 0.0f, 0.2f);
+
+    // Nouveaux ennemis
+    wp.random_coeffs[ENEMY_SPLITTER] = CLAMP(-0.1f + 1.0f * waveIndex / 12, 0.0f, 0.8f);     // à partir de la vague 2
+    wp.random_coeffs[ENEMY_HEALER] = CLAMP(-0.2f + 1.0f * waveIndex / 20, 0.0f, 0.5f);       // à partir de la vague 5
+    wp.random_coeffs[ENEMY_BIG_SPLITTER] = CLAMP(-0.3f + 1.0f * waveIndex / 30, 0.0f, 0.6f); // à partir de la vague 10
+    wp.random_coeffs[ENEMY_BOSS_SPLITTER] = CLAMP(-0.2f + 0.2f * waveIndex / 50, 0.0f, 0.15f);
+    if (waveIndex == 25 || waveIndex == 45)
+        wp.min_spawns[ENEMY_BOSS_SPLITTER] = waveIndex == 25 ? 1 : 2;
 
     if (waveIndex == 10)
     {
@@ -471,7 +582,7 @@ int updateWaveSystem(WaveSystem *ws, Grid grid, EnemyPool *ep, float dt, GameSta
         // Cet ennemi ne va pas ètre ajouté, on le récupère juste pour connaître ses HP
         ennemi_courant = defEnemy(grid, i, 0, 0);
 
-        if ((ennemi_courant.maxHP * ennemi_courant.speed <= ws->wave_HP_left && pattern->random_coeffs[i] != 0) || pattern->min_spawns[i] > 0)
+        if ((enemyEffectiveHP(i) * ennemi_courant.speed <= ws->wave_HP_left && pattern->random_coeffs[i] != 0) || pattern->min_spawns[i] > 0)
         {
             enemy_choice_pool[i] = true;
             valid = true;
@@ -533,8 +644,10 @@ int updateWaveSystem(WaveSystem *ws, Grid grid, EnemyPool *ep, float dt, GameSta
 
     if (!ennemi_choisi->is_boss)
     {
-        ws->wave_HP_left -= ennemi_choisi->maxHP * ennemi_choisi->speed;
-        ws->next_spawn_timer = ennemi_choisi->maxHP / pattern->target_POWERPS;
+        // les splitters comptent avec leurs morceaux
+        float effective_hp = enemyEffectiveHP(ennemi_choisi_id);
+        ws->wave_HP_left -= effective_hp * ennemi_choisi->speed;
+        ws->next_spawn_timer = effective_hp / pattern->target_POWERPS;
     }
     else
     {
@@ -560,24 +673,14 @@ void testWaveSystem(Grid grid, EnemyPool *ep, int n, GameStats *gs)
         return;
     }
     fprintf(fptr, "wave,hp,hpps,duration,argentCumul,ennemiesSpawned,");
-    fprintf(fptr, "TUX,");
-    fprintf(fptr, "SPEED,");
-    fprintf(fptr, "SLIME BOSS,");
-    fprintf(fptr, "HYPERSPEED,");
-    fprintf(fptr, "SPIDER,");
-    fprintf(fptr, "HIGHTUX,");
-    fprintf(fptr, "ENEMY_TANK,");
-    fprintf(fptr, "BOSS_STUN");
-    fprintf(fptr, "\n");
-
-    scr_printf("\t\t\t\tTUX\t\t");
-    scr_printf("SPEED\t\t");
-    scr_printf("SLIME BOSS\t");
-    scr_printf("HYPERSPEED\t");
-    scr_printf("SPIDER\t\t");
-    scr_printf("HIGHTUX\t\t");
-    scr_printf("ENEMY_TANK\t");
-    scr_printf("BOSS_STUN");
+    // Noms des ennemis, dans l'ordre de enum EnemyType
+    const char *names[ENEMY_COUNT] = {"TUX", "SPEED", "SLIME BOSS", "HYPERSPEED", "SPIDER", "HIGHTUX", "TANK", "BOSS_STUN",
+                                      "HEALER", "MINI_SPLIT", "SPLITTER", "BIG_SPLIT", "BOSS_SPLIT"};
+    for (int k = 0; k < ENEMY_COUNT; k++)
+        fprintf(fptr, k + 1 < ENEMY_COUNT ? "%s," : "%s\n", names[k]);
+    scr_printf("\t\t\t\t");
+    for (int k = 0; k < ENEMY_COUNT; k++)
+        scr_printf("%-12s", names[k]);
     scr_printf("\n");
     while (n <= 0 || i < n)
     {

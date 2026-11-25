@@ -16,6 +16,20 @@ bool saveExists(int slot)
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
+int saveWave(int slot)
+{
+    char path[64];
+    savePath(path, sizeof(path), slot);
+    FILE *file = fopen(path, "rb");
+    if (file == NULL)
+        return -1;
+    struct SerializedGameData data;
+    bool ok = fread(&data, sizeof(data), 1, file) == 1 && data.magic == SAVE_MAGIC && data.version == SAVE_VERSION //
+              && data.waveIndex >= 0 && data.waveIndex <= 100000 && data.gameStats.health > 0;
+    fclose(file);
+    return ok ? data.waveIndex : -1;
+}
+
 bool saveProgress(Grid grid, GameStats gameStats, int waveIndex, int slot)
 {
     if (slot < 0 || slot >= SAVE_SLOTS)
@@ -69,7 +83,7 @@ static bool cellIsValid(const struct Cell *cell, int x, int y)
     if (!cell->hasTurret)
         return true;
     const struct Turret *t = &cell->turret;
-    if (cell->type != TERRAIN || t->type < Sniper || t->type > Gatling || t->lvl < 0 || t->lvl > 2)
+    if (cell->type != TERRAIN || t->type < Sniper || t->type > Gatling || t->lvl < 0 || t->lvl > 2 || t->target_mode < 0 || t->target_mode >= 5)
         return false;
     // Statistiques du niveau actuel (le "!" refuse aussi les valeurs NaN)
     return t->reload_delay[t->lvl] > 0 && t->range_max[t->lvl] >= 0 && t->nb_ennemi[t->lvl] >= 0;
@@ -144,4 +158,66 @@ bool loadProgress(int slot, Grid *grid, GameStats *gameStats, WaveSystem *waveSy
     enemyPool->count = 0;
     labels->count = 0;
     return true;
+}
+
+/*
+## Meilleurs scores ##
+*/
+
+static const char *scores_path = "./save/scores.txt";
+
+// Ordre du classement : plus de vagues d'abord ; à égalité, la partie la plus rapide
+static int compareScores(const void *a, const void *b)
+{
+    const Score *sa = a, *sb = b;
+    if (sa->wave != sb->wave)
+        return sb->wave - sa->wave;
+    return sa->seconds - sb->seconds;
+}
+
+int loadScores(Score scores[MAX_SCORES])
+{
+    FILE *f = fopen(scores_path, "r");
+    if (f == NULL)
+        return 0;
+    int n = 0;
+    Score s;
+    while (n < MAX_SCORES && fscanf(f, "%d %d %10s", &s.wave, &s.seconds, s.date) == 3)
+        if (s.wave >= 0 && s.seconds >= 0)
+            scores[n++] = s;
+    fclose(f);
+    qsort(scores, n, sizeof(Score), compareScores);
+    return n;
+}
+
+int recordScore(int wave, int seconds)
+{
+    Score scores[MAX_SCORES + 1];
+    int n = loadScores(scores);
+
+    Score current = {wave, seconds, ""};
+    time_t now = time(NULL);
+    strftime(current.date, sizeof(current.date), "%Y-%m-%d", localtime(&now));
+    scores[n++] = current;
+    qsort(scores, n, sizeof(Score), compareScores);
+
+    // rang de la partie qui vient de se terminer (la première égale trouvée)
+    int rank = -1;
+    for (int i = 0; i < n && i < MAX_SCORES; i++)
+        if (scores[i].wave == wave && scores[i].seconds == seconds && strcmp(scores[i].date, current.date) == 0)
+        {
+            rank = i;
+            break;
+        }
+
+    struct stat st;
+    if (stat(save_dir, &st) != 0)
+        mkdir(save_dir, 0775);
+    FILE *f = fopen(scores_path, "w");
+    if (f == NULL)
+        return -1;
+    for (int i = 0; i < n && i < MAX_SCORES; i++)
+        fprintf(f, "%d %d %s\n", scores[i].wave, scores[i].seconds, scores[i].date);
+    fclose(f);
+    return rank;
 }
