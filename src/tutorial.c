@@ -123,7 +123,7 @@ static const TutoBlock chapter_turrets[] = {
     {BLOCK_TEXT, NULL, COLOR_INFERNO_BASE, "Inferno",
      "Enflamme plusieurs ennemis autour de lui. Les flammes continuent de brûler après le tir.", Inferno, NONE},
     {BLOCK_TEXT, NULL, "\033[38;5;250m", "Mortier",
-     "Obus explosifs qui touchent toute une zone, mais il ne peut pas viser les ennemis trop proches.", Mortier, NONE},
+     "Obus explosifs qui touchent une zone (jusqu'à 4 ennemis), mais il ne peut pas viser les ennemis trop proches.", Mortier, NONE},
     {BLOCK_TEXT, NULL, "\033[38;5;245m", "Gatling",
      "Énorme cadence de tir, petits dégâts, courte portée. Idéale dans un virage.", Gatling, NONE},
     {BLOCK_TEXT, NULL, COLOR_FREEZER_BASE, "Freezer",

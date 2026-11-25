@@ -61,6 +61,14 @@ int main(int argc, char **argv)
     else if (!strcmp(strategy, "mortier")) mono = Mortier;
     else if (!strcmp(strategy, "inferno")) mono = Inferno;
     else is_mono = false;
+    // "spam-<tourelle>" : défense variée pour les 6 premières tourelles, puis uniquement cette tourelle
+    bool spam = !strncmp(strategy, "spam-", 5);
+    enum TurretType spam_type = Mortier;
+    if (spam)
+    {
+        const char *t = strategy + 5;
+        spam_type = !strcmp(t, "sniper") ? Sniper : !strcmp(t, "gatling") ? Gatling : !strcmp(t, "inferno") ? Inferno : Mortier;
+    }
     enum TurretType mix[] = {Sniper, Gatling, Sniper, Mortier, Freezer, Inferno, Gatling, Petrificateur, Mortier, Sniper};
     int mix_i = 0;
     bool bank_first = !strcmp(strategy, "banque");
@@ -76,7 +84,7 @@ int main(int argc, char **argv)
         {
             for (int tries = 0; tries < 4; tries++)
             {
-                enum TurretType want = (banks < banks_wanted && built >= 6) ? Banque : (is_mono ? mono : mix[mix_i % 10]);
+                enum TurretType want = (banks < banks_wanted && built >= 6) ? Banque : (is_mono ? mono : (spam && built >= 6) ? spam_type : mix[mix_i % 10]);
                 int price = getTurretPrice(want, 0), x, y;
                 // améliorer la tourelle la moins chère à améliorer si c'est moins cher qu'un achat (ou plus de place)
                 int ux = -1, uy = -1, uprice = 1 << 30;

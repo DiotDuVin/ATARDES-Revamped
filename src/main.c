@@ -33,6 +33,8 @@ BulletPool bulletPool;
 bool selection_active = false;
 // le menu des sauvegardes est ouvert
 bool save_screen = false;
+int save_dialog_slot = -1;  // emplacement dont la fenêtre "Charger / Sauvegarder" est ouverte (-1 : aucune)
+int save_dialog_choice = 0; // option sélectionnée dans cette fenêtre (enum SaveAction)
 // le menu pause (Échap) est ouvert ; controls_view : on y affiche la liste des commandes
 bool pause_menu = false;
 bool controls_view = false;
@@ -98,11 +100,20 @@ void handle_enter_key()
     drawFullGrid(grid);
 }
 
+// Ferme la fenêtre "Charger / Sauvegarder" (la liste des sauvegardes reste ouverte)
+void closeSaveDialog()
+{
+    save_dialog_slot = -1;
+    fillBG(1, 1, width + 1, height + 1);
+    drawFullGrid(grid);
+}
+
 // Ferme tous les menus et redessine la grille
 void closeMenus()
 {
     selection_active = false;
     save_screen = false;
+    save_dialog_slot = -1;
     pause_menu = false;
     controls_view = false;
     scores_view = false;
@@ -119,6 +130,8 @@ void handle_escape()
         ligne = controls_view ? PAUSE_CONTROLS : PAUSE_SCORES; // retour au menu pause
         controls_view = scores_view = false;
     }
+    else if (save_screen && save_dialog_slot >= 0)
+        closeSaveDialog(); // retour à la liste des sauvegardes
     else if (pause_menu || selection_active || save_screen)
         closeMenus();
     else
@@ -184,6 +197,17 @@ void handle_arrow_keys(char c)
     bool down = c == 'B';
     bool right = c == 'C';
     bool left = c == 'D';
+    if (save_screen && save_dialog_slot >= 0)
+    {
+        // Fenêtre "Charger / Sauvegarder" : "Charger" est sauté si l'emplacement est vide
+        int step = (up || left) ? -1 : 1;
+        int choice = save_dialog_choice + step;
+        if (choice == SAVE_ACTION_LOAD && !saveSlotLoadable(save_dialog_slot))
+            choice += step;
+        if (choice >= SAVE_ACTION_LOAD && choice < SAVE_ACTIONS)
+            save_dialog_choice = choice;
+        return;
+    }
     if (!selection_active && !save_screen && !pause_menu)
     {
         // Mouvement de la sélection de cellule, en prenant en compte le chemin et les bords de la grid
@@ -357,6 +381,14 @@ int handle_mouse(InputEvent ev)
         }
         if (pause_menu && (controls_view || scores_view))
             return 0;
+        if (save_screen && save_dialog_slot >= 0)
+        {
+            int action = saveDialogLineAt(ev.x, ev.y);
+            if (action < 0 || action == save_dialog_choice || (action == SAVE_ACTION_LOAD && !saveSlotLoadable(save_dialog_slot)))
+                return 0;
+            save_dialog_choice = action;
+            return 1;
+        }
         int line, first = 1;
         if (pause_menu)
             line = menuLineAt(ev.x, ev.y, 1, PAUSE_ITEMS);
@@ -387,6 +419,19 @@ int handle_mouse(InputEvent ev)
     if (ev.key != MOUSE_LEFT)
         return 0;
 
+    if (save_screen && save_dialog_slot >= 0)
+    {
+        if (!saveDialogContains(ev.x, ev.y))
+        {
+            closeSaveDialog(); // clic à côté : retour à la liste
+            return 1;
+        }
+        int action = saveDialogLineAt(ev.x, ev.y);
+        if (action < 0 || (action == SAVE_ACTION_LOAD && !saveSlotLoadable(save_dialog_slot)))
+            return 1;
+        save_dialog_choice = action;
+        return 10; // clic : validation
+    }
     if (menu_open)
     {
         if (!menuContains(ev.x, ev.y))
@@ -1037,6 +1082,7 @@ int main(int argc, char *argv[])
                 }
                 ligne = 3;
                 save_screen = !save_screen;
+                save_dialog_slot = -1;
             }
             else if (c == 'o' || c == 'O')
             {
@@ -1105,9 +1151,16 @@ int main(int argc, char *argv[])
                 int slot = ligne - 3; // les emplacements save_0 à save_6 sont sur les lignes 3 à 9
                 if (!save_was_open)
                     ; // le menu vient de s'ouvrir : rien à faire
-                else if (c == 10) // Entrée : charger
+                else if (c == 10 && save_dialog_slot < 0) // Entrée sur un emplacement : fenêtre "Charger / Sauvegarder"
                 {
-                    if (loadProgress(slot, &grid, &gameStats, &waveSystem, &enemyPool, &labels))
+                    save_dialog_slot = slot;
+                    save_dialog_choice = saveSlotLoadable(slot) ? SAVE_ACTION_LOAD : SAVE_ACTION_SAVE;
+                }
+                else if (c == 10) // Entrée dans la fenêtre : action choisie
+                {
+                    int dialog_slot = save_dialog_slot;
+                    closeSaveDialog();
+                    if (save_dialog_choice == SAVE_ACTION_LOAD && loadProgress(dialog_slot, &grid, &gameStats, &waveSystem, &enemyPool, &labels))
                     {
                         // La grille chargée peut être plus petite : on remet la sélection sur une case valide
                         selected_cell_x = 0;
@@ -1119,13 +1172,15 @@ int main(int argc, char *argv[])
                         drawFullGrid(grid);
                         save_screen = false;
                     }
-                }
-                else if (c == ' ') // Espace : sauvegarder
-                {
-                    saveProgress(grid, gameStats, waveSystem.current_wave_index, slot);
+                    else if (save_dialog_choice == SAVE_ACTION_SAVE)
+                        saveProgress(grid, gameStats, waveSystem.current_wave_index, dialog_slot);
                 }
                 if (save_screen)
+                {
                     showSaveScreen(ligne); // affiché après l'action pour que l'état des emplacements soit à jour
+                    if (save_dialog_slot >= 0)
+                        showSaveDialog(save_dialog_slot, save_dialog_choice);
+                }
             }
         }
         }

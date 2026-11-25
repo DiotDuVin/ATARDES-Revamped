@@ -260,7 +260,8 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                         if (grid.cells[x][y].turret.splash[lvl] != 0.0)
                                         {
                                             float d_min = grid.cells[x][y].turret.splash[lvl];
-                                            for (int j = 0; j < ep.count; j++)
+                                            int splashed = 0; // ennemis touchés par l'explosion, en plus de la cible
+                                            for (int j = 0; j < ep.count && splashed < MORTAR_SPLASH_MAX; j++)
                                             {
                                                 if (j != i && ep.enemies[j].state == ENEMY_STATE_ALIVE)
                                                 {
@@ -269,6 +270,7 @@ void updateTowers(Grid grid, EnemyPool ep, float dt, GameStats *gs)
                                                     if (d_enemy < d_min)
                                                     {
                                                         ep.enemies[j].hp -= grid.cells[x][y].turret.damage[lvl] / 2 * rapport_speed_damage;
+                                                        splashed++;
                                                     }
                                                 }
                                             }
@@ -395,7 +397,7 @@ void updateBullets(BulletPool *bp, float dt)
 static const int TURRET_PRICES[7][3] = {
     {15, 50, 110},  // Sniper
     {20, 60, -1},  // Inferno
-    {35, 80, -1},  // Mortier
+    {35, 120, -1}, // Mortier
     {25, 70, -1},  // Freezer
     {10, 40, -1},  // Pétrificateur
     {80, 180, -1}, // Banque
@@ -429,8 +431,8 @@ struct Turret getTurretStruct(enum TurretType type)
         tur.range_max[1] = 3.5;
         tur.range_max[2] = 5.5;
         tur.damage[0] = 1;
-        tur.damage[1] = 1.3;
-        tur.damage[2] = 1.8;
+        tur.damage[1] = 1.6;
+        tur.damage[2] = 3;
         tur.reload_delay[0] = 1.2;
         tur.reload_delay[1] = 1;
         tur.reload_delay[2] = 0.9;
@@ -472,13 +474,13 @@ struct Turret getTurretStruct(enum TurretType type)
         tur.range_min[0] = 2.5;
         tur.range_min[1] = 2;
         tur.range_max[0] = 5.5;
-        tur.range_max[1] = 6.5;
-        tur.damage[0] = 3;   // 4/4 -> 1dps
-        tur.damage[1] = 4; // 5/3 -> 1.42dps
+        tur.range_max[1] = 5.5;
+        tur.damage[0] = 3;
+        tur.damage[1] = 3.5;
         tur.reload_delay[0] = 3;
-        tur.reload_delay[1] = 2.5;
+        tur.reload_delay[1] = 3;
         tur.splash[0] = 1.0;
-        tur.splash[1] = 1.5;
+        tur.splash[1] = 1.25;
         tur.nb_ennemi[0] = 1;
         tur.nb_ennemi[1] = 1;
         tur.has_effect = false;
@@ -611,7 +613,7 @@ static const char *turretDescription(enum TurretType type)
     {
     case Sniper: return "Grande portée, gros dégâts, tir lent.";
     case Inferno: return "Brûle jusqu'à 4 ennemis proches.";
-    case Mortier: return "Explosion de zone. Inutile de trop près.";
+    case Mortier: return "Explosion de zone (4 ennemis au plus). Inutile de trop près.";
     case Gatling: return "Tir très rapide, courte portée.";
     case Petrificateur: return "Fige un ennemi sur place.";
     case Freezer: return "Ralentit les ennemis autour de lui.";
@@ -865,12 +867,80 @@ void showSaveScreen(int ligne)
     int y = openMenu(COLOR_YELLOW "Sauvegardes", "\033[38;5;250m", &left, &right, NULL, &y0, &h);
     for (int slot = 0; slot < SAVE_SLOTS; slot++)
     {
-        char label[32];
+        char label[32], value[32];
         snprintf(label, sizeof(label), slot == 0 ? "Emplacement 0 (auto)" : "Emplacement %d", slot);
-        menuLine(left, right, y, ligne - 3 == slot, label, saveExists(slot) ? COLOR_GREEN "sauvegardé" : COLOR_GRAY "vide");
+        int wave = saveWave(slot);
+        if (wave >= 0)
+            snprintf(value, sizeof(value), COLOR_GREEN "vague %d", wave);
+        else
+            snprintf(value, sizeof(value), "%s", saveExists(slot) ? COLOR_GRAY "incompatible" : COLOR_GRAY "vide");
+        menuLine(left, right, y, ligne - 3 == slot, label, value);
         y += line_h;
     }
-    menuFooter(left, y0, h, COLOR_GRAY "Entrée : charger   Espace : sauver", COLOR_GRAY "Échap ou S : fermer");
+    menuFooter(left, y0, h, COLOR_GRAY "Entrée : charger ou sauvegarder", COLOR_GRAY "Échap ou S : fermer");
+}
+
+/*
+Fenêtre de confirmation, par-dessus la liste des sauvegardes : on choisit explicitement
+de charger ou de sauvegarder (avant, Espace sauvegardait directement et pouvait écraser une partie).
+*/
+#define SAVE_DIALOG_HELP COLOR_GRAY "Entrée : valider   Échap : retour"
+static void saveDialogGeometry(int *x0, int *y0, int *w, int *h, int *first_line_y)
+{
+    int rows = ui_text_rows(), line_h = rows + 1;
+    *w = MAX(big_text_mode ? 120 : 56, ui_text_width(SAVE_DIALOG_HELP) + 8);
+    *h = 2 + rows + 2 + rows + 2 + SAVE_ACTIONS * line_h - 1 + 2 + rows + 2;
+    *x0 = width_center() - *w / 2;
+    *y0 = height_center() - *h / 2;
+    *first_line_y = *y0 + 2 + rows + 2 + rows + 2;
+}
+
+bool saveSlotLoadable(int slot)
+{
+    return saveWave(slot) >= 0;
+}
+
+void showSaveDialog(int slot, int choice)
+{
+    int x0, y0, w, h, first;
+    saveDialogGeometry(&x0, &y0, &w, &h, &first);
+    drawPanel(x0, y0, w, h, COLOR_YELLOW);
+    int left = x0 + 4, right = x0 + w - 5, line_h = ui_text_rows() + 1;
+
+    char text[64];
+    snprintf(text, sizeof(text), COLOR_YELLOW "Emplacement %d", slot);
+    ui_text_centered(x0 + w / 2, y0 + 2, text);
+    int wave = saveWave(slot);
+    if (wave >= 0)
+        snprintf(text, sizeof(text), COLOR_GREEN "Partie sauvée : vague %d", wave);
+    else
+        snprintf(text, sizeof(text), COLOR_GRAY "%s", saveExists(slot) ? "Sauvegarde incompatible" : "Emplacement vide");
+    ui_text_centered(x0 + w / 2, y0 + 2 + ui_text_rows() + 2, text);
+    scr_printf(RESET);
+
+    bool loadable = wave >= 0;
+    menuLine(left, right, first, choice == SAVE_ACTION_LOAD, loadable ? "Charger" : COLOR_GRAY "Charger", "");
+    menuLine(left, right, first + line_h, choice == SAVE_ACTION_SAVE, "Sauvegarder", saveExists(slot) ? "\033[38;5;208mremplace" : "");
+    menuLine(left, right, first + 2 * line_h, choice == SAVE_ACTION_CANCEL, "Annuler", "");
+    ui_text_centered(x0 + w / 2, y0 + h - 2 - ui_text_rows(), SAVE_DIALOG_HELP);
+    scr_printf(RESET);
+}
+
+bool saveDialogContains(int mx, int my)
+{
+    int x0, y0, w, h, first;
+    saveDialogGeometry(&x0, &y0, &w, &h, &first);
+    return mx >= x0 && mx < x0 + w && my >= y0 && my < y0 + h;
+}
+
+int saveDialogLineAt(int mx, int my)
+{
+    int x0, y0, w, h, first;
+    saveDialogGeometry(&x0, &y0, &w, &h, &first);
+    if (mx < x0 || mx >= x0 + w || my < first)
+        return -1;
+    int line = (my - first) / (ui_text_rows() + 1);
+    return line < SAVE_ACTIONS ? line : -1;
 }
 
 void showTowerSelection(int ligne, bool hasTurret, struct Turret selectedTurret, int cash)
@@ -969,7 +1039,7 @@ void showControls(void)
         {"Espace", "boutique"},
         {"Entrée", "valider"},
         {"O / L", "vitesse + / -"},
-        {"S", "sauvegardes"},
+        {"S", "sauvegardes (charger ou sauvegarder)"},
         {"Échap", "pause"},
         {"Q", "quitter (sauvé en 0)"},
     };

@@ -39,6 +39,9 @@ bool turretHasTargeting(enum TurretType type);
 int sortTargets(Grid grid, EnemyPool ep, int x, int y, int mode, int order[TARGET_MAX]);
 
 // Durée de la brûlure de l'Inferno selon son niveau (en secondes)
+// Nombre maximal d'ennemis touchés par une explosion de Mortier, en plus de sa cible
+#define MORTAR_SPLASH_MAX 3
+
 #define INFERNO_BURN_TIME(lvl) ((lvl) + 2)
 
 #define SHOP_SIZE 7 // nombre de tourelles dans la boutique
@@ -75,6 +78,18 @@ int menuLineAt(int mx, int my, int skip, int count);
 // Position et taille communes à toutes les fenêtres du jeu
 void menuGeometry(int *x0, int *y0, int *w, int *h);
 void showSaveScreen(int ligne);
+// Fenêtre de choix pour un emplacement de sauvegarde
+#define SAVE_ACTIONS 3
+enum SaveAction
+{
+    SAVE_ACTION_LOAD,
+    SAVE_ACTION_SAVE,
+    SAVE_ACTION_CANCEL,
+};
+void showSaveDialog(int slot, int choice);
+bool saveSlotLoadable(int slot);
+bool saveDialogContains(int mx, int my);
+int saveDialogLineAt(int mx, int my); // ligne (SaveAction) sous la souris, -1 si aucune
 struct Turret getTurretStruct(enum TurretType type);
 int getTurretPrice(enum TurretType type, int level);
 

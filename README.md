@@ -70,7 +70,7 @@ ATARDES_TERMINAL=xterm ./jouer.sh     # forcer un terminal
 | Entrée           | clic sur une ligne         | acheter, améliorer, vendre, valider                 |
 | ← → (ligne Cible)| clic sur la ligne Cible    | changer le mode de ciblage                          |
 | O / L            |                            | accélérer / ralentir (x1 à x16)                     |
-| S                |                            | sauvegardes (Entrée : charger, Espace : sauver)     |
+| S                |                            | sauvegardes (Entrée sur un emplacement : charger ou sauvegarder) |
 | Échap            | clic droit / clic à côté   | fermer le menu, ou ouvrir le menu pause             |
 | Q                |                            | quitter (la partie est sauvée dans l'emplacement 0, « Continuer » dans le menu principal la reprend) |
 |                  | molette                    | monter / descendre dans les menus                   |
@@ -85,7 +85,7 @@ Tu commences avec 20 ❤ et 30 €. Chaque ennemi qui atteint la sortie retire d
 | ------------- | --------------- | ----------------------------------------------------------------- |
 | Sniper        | 15 / 50 / 110   | tir précis sur une cible, longue portée                           |
 | Gatling       | 35 / 100        | tir très rapide, courte portée                                    |
-| Mortier       | 35 / 80         | explosions de zone, mais portée minimale                          |
+| Mortier       | 35 / 120        | explosions de zone (4 ennemis au plus), mais portée minimale      |
 | Inferno       | 20 / 60         | brûle plusieurs ennemis autour d'elle                             |
 | Freezer       | 25 / 70         | ralentit tous les ennemis à portée                                |
 | Pétrificateur | 10 / 40         | fige un ennemi sur place                                          |
